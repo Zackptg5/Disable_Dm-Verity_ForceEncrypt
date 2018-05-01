@@ -1,0 +1,190 @@
+#!/sbin/sh
+# AnyKernel2 Backend
+# osm0sis @ xda-developers
+
+OUTFD=/proc/self/fd/$2;
+ZIPFILE="$3";
+DIR=`dirname "$ZIPFILE"`;
+
+ui_print() {
+  until [ ! "$1" ]; do
+    echo -e "ui_print $1\nui_print" > $OUTFD;
+    shift;
+  done;
+}
+show_progress() { echo "progress $1 $2" > $OUTFD; }
+file_getprop() { grep "^$2=" "$1" | cut -d= -f2; }
+if [ ! "$(getprop 2>/dev/null)" ]; then
+  getprop() {
+    local propval="$(file_getprop /default.prop $1 2>/dev/null)";
+    test "$propval" || local propval="$(file_getprop /system/build.prop $1 2>/dev/null)";
+    test "$propval" && echo "$propval" || echo "";
+  }
+fi;
+cleanup() { rm -rf /tmp/anykernel; }
+debugging() {
+  case $(basename "$ZIPFILE" .zip) in
+    *-debugging)
+      ui_print " ";
+      ui_print "Creating debugging archive in zip directory...";
+      $bb tar -czvf "$DIR/anykernel2-$(date +%Y-%m-%d_%H%M%S)-debug.tgz" /tmp/*;
+    ;;
+  esac;
+}
+abort() {
+  ui_print "$*";
+  debugging;
+  if [ ! -f /tmp/anykernel/anykernel.sh -o "$(file_getprop /tmp/anykernel/anykernel.sh do.cleanuponabort 2>/dev/null)" == 1 ]; then
+    cleanup;
+  fi;
+  umount -l /system_root 2>/dev/null
+  umount -l /system 2>/dev/null
+  umount -l /vendor 2>/dev/null
+  exit 1;
+}
+is_mounted() {
+  TARGET="`readlink -f $1`"
+  cat /proc/mounts | grep " $TARGET " >/dev/null
+  return $?
+}
+mount_system() {
+  # Check A/B slot
+  slot=`getprop ro.boot.slot_suffix`
+  if [ -z $slot ]; then
+    slot=_`getprop ro.boot.slot`
+    [ $slot = "_" ] && slot=
+  fi
+  # Check the boot image to make sure the slot actually make sense
+  bootimage=
+  if [ ! -z $slot ]; then
+    bootimage=`find /dev/block -iname boot$slot | head -n 1` 2>/dev/null
+  fi
+  [ -z $bootimage ] && slot=
+  # Detect dtbo
+  dtboimage=`find /dev/block -iname dtbo$slot | head -n 1` 2>/dev/null
+  [ ! -z $dtboimage ] && dtboimage=`readlink -f $dtboimage`
+  [ -z $slot ] || ui_print "- A/B partition detected, current slot: $SLOT"
+  is_mounted /system || [ -f /system/build.prop ] || mount -o rw /system 2>/dev/null
+  if ! is_mounted /system && ! [ -f /system/build.prop ]; then
+    SYSTEMBLOCK=`find /dev/block -iname system$slot | head -n 1`
+    mount -t ext4 -o rw $SYSTEMBLOCK /system
+  fi
+  is_mounted /system || [ -f /system/build.prop ] || abort "Cannot mount /system"
+  cat /proc/mounts | grep -E '/dev/root|/system_root' >/dev/null && SKIP_INITRAMFS=true || SKIP_INITRAMFS=false
+  if [ -f /system/init.rc ]; then
+    SKIP_INITRAMFS=true
+    mkdir /system_root 2>/dev/null
+    mount --move /system /system_root
+    mount -o bind /system_root/system /system
+  fi
+  if [ -L /system/vendor ]; then
+    # Seperate /vendor partition
+    is_mounted /vendor || mount -o rw /vendor 2>/dev/null
+    if ! is_mounted /vendor; then
+      VENDORBLOCK=`find /dev/block -iname vendor$slot | head -n 1`
+      mount -t ext4 -o rw $VENDORBLOCK /vendor
+    fi
+    is_mounted /vendor || abort "Cannot mount /vendor"
+  fi
+}
+
+ui_print " ";
+cleanup;
+mkdir -p /tmp/anykernel/bin;
+cd /tmp/anykernel;
+unzip -o "$ZIPFILE";
+if [ $? != 0 -o -z "$(ls /tmp/anykernel/tools)" ]; then
+  abort "Unzip failed. Aborting...";
+fi;
+bb=/tmp/anykernel/tools/busybox;
+chmod 755 $bb;
+$bb chmod -R 755 /tmp/anykernel/tools /tmp/anykernel/bin;
+
+if [ -f /tmp/anykernel/banner ]; then
+  ui_print " ";
+  while IFS='' read -r line || $bb [[ -n "$line" ]]; do
+    ui_print "$line";
+  done < /tmp/anykernel/banner;
+  ui_print " ";
+fi;
+
+#ui_print "$(file_getprop /tmp/anykernel/anykernel.sh kernel.string)";
+if [ -f /tmp/anykernel/version ]; then
+  ui_print " ";
+  ui_print "$(cat /tmp/anykernel/version)";
+  ui_print " ";
+fi;
+ui_print " ";
+ui_print "AnyKernel2 by osm0sis @ xda-developers";
+ui_print " ";
+ui_print " ";
+
+mount_system
+mount /data 2>/dev/null;
+
+if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.devicecheck)" == 1 ]; then
+  ui_print "Checking device...";
+  for i in 1 2 3 4 5; do
+    testname="$(file_getprop /tmp/anykernel/anykernel.sh device.name$i)";
+    if [ "$(getprop ro.product.device)" == "$testname" -o "$(getprop ro.build.product)" == "$testname" ]; then
+      ui_print "$testname";
+      match=1;
+      break;            
+    fi;
+  done;
+  ui_print " ";
+  if [ "$match" != 1 ]; then
+    abort "Unsupported device. Aborting...";
+  fi;
+fi;
+
+for i in $($bb --list); do
+  $bb ln -s $bb /tmp/anykernel/bin/$i;
+done;
+if [ $? != 0 -o -z "$(ls /tmp/anykernel/bin)" ]; then
+  abort "Recovery busybox setup failed. Aborting...";
+fi;
+sed -i -e "s|<slot>|$slot|" -e "s|<dtboimage>|$dtboimage|" /tmp/anykernel/tools/ak2-core.sh
+PATH="/tmp/anykernel/bin:$PATH" $bb ash /tmp/anykernel/anykernel.sh $2;
+if [ $? != "0" ]; then
+  abort;
+fi;
+
+if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.modules)" == 1 ]; then
+  ui_print " ";
+  ui_print "Pushing modules...";
+  cd /tmp/anykernel/modules;
+  for module in $(find . -name '*.ko'); do
+    case $module in
+      */system/*) modtarget=$root/$module;;
+      *) modtarget=/$module;;
+    esac;
+    if [ ! -e $modtarget ]; then
+      case $module in
+        */vendor/*) mod=vendor;;
+        *) mod=system;;
+      esac;
+    fi;
+    mkdir -p $(dirname $modtarget);
+    $bb cp -rLf $module $modtarget;
+    $bb chown 0:0 $modtarget;
+    $bb chmod 644 $modtarget;
+    if [ "$mod" ]; then
+      chcon "u:object_r:${mod}_file:s0" $modtarget;
+    fi;
+  done;
+  cd /tmp/anykernel;
+fi;
+
+debugging;
+
+if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.cleanup)" == 1 ]; then
+  cleanup;
+fi;
+
+umount -l /system_root 2>/dev/null
+umount -l /system 2>/dev/null
+umount -l /vendor 2>/dev/null
+ui_print " ";
+ui_print " ";
+ui_print "Done!";

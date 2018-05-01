@@ -1,0 +1,5 @@
+# Declare files that will always have LF line endings on checkout.
+*.sh text eol=lf
+*.md text eol=lf
+META-INF/** text eol=lf
+patch/** text eol=lf
