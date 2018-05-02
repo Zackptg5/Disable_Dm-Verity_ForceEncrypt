@@ -39,13 +39,6 @@ dump_boot;
 
 
 # begin ramdisk changes
-case $(grep_prop ro.product.cpu.abi) in
-  arm*) mv -f $bin/magiskboot_arm $bin/magiskboot;;
-  x86*) mv -f $bin/magiskboot_x86 $bin/magiskboot;;
-  *) ui_print "Unsupported CPU architecture!"; ui_print "Unable to patch dtb in ramdisk"; ui_print "and/or fstab in dtbo!";;
-esac
-
-[ -f dtb ] && list="${list} dtb"
 for i in fstab.*; do
   [ -f "$i" ] || continue
   list="${list} $i"
@@ -60,6 +53,7 @@ if [ $(grep_prop ro.build.version.sdk) -ge 26 ]; then
   patch_prop $overlay/default.prop ro.config.dmverity false
   rm -f verity_key sbin/firmware_key.cer
 fi
+[ -f dtb ] && list="${list} dtb"
 
 ui_print "Disabling forced encryption in the fstab..."
 found_fstab=false
@@ -90,13 +84,15 @@ for fstab in $fstabs; do
 done
 $found_fstab || ui_print "Unable to find the fstab!"
 
-[ -f $overlay/dtb ] && $bin/magiskboot --dtb-patch $overlay/dtb && ui_print "Patching fstab in dtb to remove dm-verity"
+# remove dm_verity from dtb and dtbo
+patch_dtb $split_img/boot.img-zImage
+[ -f $overlay/dtb ] && patch_dtb $overlay/dtb
+[ ! -z $dtboimage ] && { cp -f $dtboimage /tmp/anykernel/dtbo.img; patch_dtb /tmp/anykernel/dtbo.img; }
 
 # end ramdisk changes
 
 ui_print " "
 ui_print "Repacking boot image..."
 write_boot;
-patch_dtbo_image
 
 ## end install

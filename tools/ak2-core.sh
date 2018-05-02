@@ -408,7 +408,7 @@ flash_boot() {
     fi;
   done;
   if [ "$dtbo" ]; then
-    dtbo_block=/dev/block/bootdevice/by-name/dtbo$slot;
+    dtbo_block=`find /dev/block -iname dtbo$slot | head -n 1`;
     if [ ! -e "$(echo $dtbo_block)" ]; then
       ui_print " "; ui_print "dtbo partition could not be found. Aborting..."; exit 1;
     fi;
@@ -599,13 +599,10 @@ grep_prop() { grep "^$1" "/system/build.prop" | cut -d= -f2; }
 
 device_check() { test "$(getprop ro.product.device)" == "$1" -o "$(getprop ro.build.product)" == "$1" && return 0 || return 1; } 
 
-patch_dtbo_image() {
-  if [ ! -z $dtboimage ]; then
-    if $bin/magiskboot --dtb-test $dtboimage; then
-      ui_print "Patching fstab in dtbo to remove avb-verity"
-      $bin/magiskboot --dtb-patch $dtboimage
-      return 0
-    fi
+patch_dtb() {
+  if [ "$(sed -n '/\x76\x65\x72\x69\x66\x79/p' $1)" ]; then
+    ui_print "Patching $(basename $1) to remove dm-verity..."
+    sed -i -e 's/\x2c\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79\x2c/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00/g' $1
   fi
 }
 
