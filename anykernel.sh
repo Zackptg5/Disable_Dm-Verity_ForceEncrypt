@@ -85,9 +85,14 @@ done
 $found_fstab || ui_print "Unable to find the fstab!"
 
 # remove dm_verity from dtb and dtbo
-patch_dtb $split_img/boot.img-zImage
-[ -f $overlay/dtb ] && patch_dtb $overlay/dtb
-[ ! -z $dtboimage ] && { cp -f $dtboimage /tmp/anykernel/dtbo.img; patch_dtb /tmp/anykernel/dtbo.img; }
+[ -z $dtboimage ] || cp -f $dtboimage /tmp/anykernel/dtbo.img
+for dtb in $split_img/boot.img-zImage $overlay/dtb /tmp/anykernel/dtbo.img; do
+  [ -f $dtb ] || continue
+  if [ "$(sed -n '/\x76\x65\x72\x69\x66\x79/p' $dtb)" ]; then
+    ui_print "Patching $(basename $dtb) to remove dm-verity..."
+    sed -i -e 's/\x2c\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79\x2c/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00/g' $dtb
+  fi
+done
 
 # end ramdisk changes
 

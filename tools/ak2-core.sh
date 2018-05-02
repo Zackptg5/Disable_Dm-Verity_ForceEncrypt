@@ -599,11 +599,4 @@ grep_prop() { grep "^$1" "/system/build.prop" | cut -d= -f2; }
 
 device_check() { test "$(getprop ro.product.device)" == "$1" -o "$(getprop ro.build.product)" == "$1" && return 0 || return 1; } 
 
-patch_dtb() {
-  if [ "$(sed -n '/\x76\x65\x72\x69\x66\x79/p' $1)" ]; then
-    ui_print "Patching $(basename $1) to remove dm-verity..."
-    sed -i -e 's/\x2c\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79\x2c/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00/g' $1
-  fi
-}
-
 ## end methods
