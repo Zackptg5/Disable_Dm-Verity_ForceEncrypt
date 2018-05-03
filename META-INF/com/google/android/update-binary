@@ -95,9 +95,13 @@ if [ $? != 0 -o -z "$(ls /tmp/anykernel/tools)" ]; then
   abort "Unzip failed. Aborting...";
 fi;
 
+bb=/tmp/anykernel/tools/busybox;
+chmod 755 $bb;
+$bb chmod -R 755 /tmp/anykernel/tools /tmp/anykernel/bin;
+
 if [ -f /tmp/anykernel/banner ]; then
   ui_print " ";
-  while IFS='' read -r line || [[ -n "$line" ]]; do
+  while IFS='' read -r line || $bb [[ -n "$line" ]]; do
     ui_print "$line";
   done < /tmp/anykernel/banner;
   ui_print " ";
@@ -116,19 +120,6 @@ ui_print " ";
 
 mount_system;
 mount /data 2>/dev/null;
-
-case `file_getprop /system/build.prop ro.product.cpu.abi` in
-  x86_64*) abi=x86_64; mv -f /tmp/anykernel/tools/x86_64/* /tmp/anykernel/tools;;
-  x86*) abi=x86; mv -f /tmp/anykernel/tools/x86/* /tmp/anykernel/tools;;
-  mips64*) abi=mips64; mv -f /tmp/anykernel/tools/mips64/* /tmp/anykernel/tools;;
-  mips*) abi=mips; mv -f /tmp/anykernel/tools/mips/* /tmp/anykernel/tools;;
-  arm64*) abi=arm64; mv -f /tmp/anykernel/tools/arm64/* /tmp/anykernel/tools;;
-  *) abi=arm; mv -f /tmp/anykernel/tools/arm/* /tmp/anykernel/tools;;
-esac
-
-bb=/tmp/anykernel/tools/busybox;
-chmod 755 $bb;
-$bb chmod -R 755 /tmp/anykernel/tools /tmp/anykernel/bin;
 
 if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.devicecheck)" == 1 ]; then
   ui_print "Checking device...";
@@ -152,7 +143,7 @@ done;
 if [ $? != 0 -o -z "$(ls /tmp/anykernel/bin)" ]; then
   abort "Recovery busybox setup failed. Aborting...";
 fi;
-sed -i -e "s|<slot>|$slot|" -e "s|<bootimage>|$bootimage|" -e "s|<dtboimage>|$dtboimage|" -e "s|<abi>|$abi|" /tmp/anykernel/tools/ak2-core.sh
+sed -i -e "s|<slot>|$slot|" -e "s|<bootimage>|$bootimage|" -e "s|<dtboimage>|$dtboimage|" /tmp/anykernel/tools/ak2-core.sh
 PATH="/tmp/anykernel/bin:$PATH" $bb ash /tmp/anykernel/anykernel.sh $2;
 if [ $? != "0" ]; then
   abort;
