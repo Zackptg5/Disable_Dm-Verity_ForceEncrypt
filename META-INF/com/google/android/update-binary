@@ -70,9 +70,7 @@ mount_system() {
     mount -t ext4 -o rw $SYSTEMBLOCK /system
   fi
   is_mounted /system || [ -f /system/build.prop ] || abort "Cannot mount /system"
-  cat /proc/mounts | grep -E '/dev/root|/system_root' >/dev/null && SKIP_INITRAMFS=true || SKIP_INITRAMFS=false
   if [ -f /system/init.rc ]; then
-    SKIP_INITRAMFS=true
     mkdir /system_root 2>/dev/null
     mount --move /system /system_root
     mount -o bind /system_root/system /system

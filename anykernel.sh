@@ -54,6 +54,7 @@ if [ $(grep_prop ro.build.version.sdk) -ge 26 ]; then
   rm -f verity_key sbin/firmware_key.cer
 fi
 [ -f dtb ] && list="${list} dtb"
+[ -f kernel ] && list="${list} kernel"
 
 ui_print "Disabling forced encryption in the fstab..."
 found_fstab=false
@@ -83,6 +84,9 @@ for fstab in $fstabs; do
 	found_fstab=true
 done
 $found_fstab || ui_print "Unable to find the fstab!"
+
+# Remove Samsung RKP in stock kernel
+[ -f $overlay/kernel ] && sed -i 's/\x49\x01\x00\x54\x01\x14\x40\xB9\x3F\xA0\x0F\x71\xE9\x00\x00\x54\x01\x08\x40\xB9\x3F\xA0\x0F\x71\x89\x00\x00\x54\x00\x18\x40\xB9\x1F\xA0\x0F\x71\x88\x01\x00\x54/\xA1\x02\x00\x54\x01\x14\x40\xB9\x3F\xA0\x0F\x71\x40\x02\x00\x54\x01\x08\x40\xB9\x3F\xA0\x0F\x71\xE0\x01\x00\x54\x00\x18\x40\xB9\x1F\xA0\x0F\x71\x81\x01\x00\x54/' $overlay/kernel
 
 # remove dm_verity from dtb and dtbo
 [ -z $dtboimage ] || cp -f $dtboimage /tmp/anykernel/dtbo.img
