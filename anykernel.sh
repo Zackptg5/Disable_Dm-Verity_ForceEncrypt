@@ -18,6 +18,7 @@ device.name5=
 
 # shell variables
 ramdisk_compression=auto;
+is_slot_device=auto;
 block=auto;
 
 
@@ -36,6 +37,9 @@ chown -R root:root $ramdisk/*;
 ui_print "Unpacking boot image..."
 ui_print " "
 dump_boot;
+# Detect dtbo
+dtboimage=`find /dev/block -iname dtbo$slot | head -n 1` 2>/dev/null;
+[ -z $dtboimage ] || { dtboimage=`readlink -f $dtboimage`; cp -f $dtboimage /tmp/anykernel/dtbo.img; }
 
 
 # begin ramdisk changes
@@ -44,7 +48,7 @@ for i in fstab.*; do
   list="${list} $i"
   fstabs="${fstabs} $overlay/$i"
 done
-if [ $(grep_prop ro.build.version.sdk) -ge 26 ]; then
+if [ $(file_getprop /system/build.prop ro.build.version.sdk) -ge 26 ]; then
   for i in /system/vendor/etc/fstab.*; do
     [ -f "$i" ] || continue
     fstabs="${fstabs} $i"
@@ -89,12 +93,11 @@ $found_fstab || ui_print "Unable to find the fstab!"
 [ -f $overlay/kernel ] && sed -i 's/\x49\x01\x00\x54\x01\x14\x40\xB9\x3F\xA0\x0F\x71\xE9\x00\x00\x54\x01\x08\x40\xB9\x3F\xA0\x0F\x71\x89\x00\x00\x54\x00\x18\x40\xB9\x1F\xA0\x0F\x71\x88\x01\x00\x54/\xA1\x02\x00\x54\x01\x14\x40\xB9\x3F\xA0\x0F\x71\x40\x02\x00\x54\x01\x08\x40\xB9\x3F\xA0\x0F\x71\xE0\x01\x00\x54\x00\x18\x40\xB9\x1F\xA0\x0F\x71\x81\x01\x00\x54/' $overlay/kernel
 
 # remove dm_verity from dtb and dtbo
-[ -z $dtboimage ] || cp -f $dtboimage /tmp/anykernel/dtbo.img
-for dtb in $split_img/boot.img-zImage $overlay/dtb /tmp/anykernel/dtbo.img; do
-  [ -f $dtb ] || continue
-  if [ "$(sed -n '/\x76\x65\x72\x69\x66\x79/p' $dtb)" ]; then
-    ui_print "Patching $(basename $dtb) to remove dm-verity..."
-    sed -i -e 's/\x2c\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79\x2c/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00/g' $dtb
+for dtbs in $split_img/boot.img-zImage $overlay/dtb /tmp/anykernel/dtbo.img; do
+  [ -f $dtbs ] || continue
+  if [ "$(sed -n '/\x76\x65\x72\x69\x66\x79/p' $dtbs)" ]; then
+    ui_print "Patching $(basename $dtbs) to remove dm-verity..."
+    sed -i -e 's/\x2c\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79\x2c/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00/g' $dtbs
   fi
 done
 

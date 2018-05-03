@@ -4,9 +4,6 @@ ramdisk=/tmp/anykernel/ramdisk;
 bin=/tmp/anykernel/tools;
 split_img=/tmp/anykernel/split_img;
 patch=/tmp/anykernel/patch;
-slot=<slot>;
-bootimage=<bootimage>;
-dtboimage=<dtboimage>;
 
 chmod -R 755 $bin;
 mkdir -p $split_img;
@@ -33,93 +30,95 @@ reset_ak() {
   . /tmp/anykernel/tools/ak2-core.sh $FD;
 }
 
+# slot detection enabled by is_slot_device=1 (from anykernel.sh)
+if [ "$is_slot_device" == 1 -o "$is_slot_device" == "auto" ]; then
+  slot=$(getprop ro.boot.slot_suffix 2>/dev/null);
+  test ! "$slot" && slot=$(grep -o 'androidboot.slot_suffix=.*$' /proc/cmdline | cut -d\  -f1 | cut -d= -f2);
+  if [ ! "$slot" ]; then
+    slot=$(getprop ro.boot.slot 2>/dev/null);
+    test ! "$slot" && slot=$(grep -o 'androidboot.slot=.*$' /proc/cmdline | cut -d\  -f1 | cut -d= -f2);
+    test "$slot" && slot=_$slot;
+  fi;
+  if [ "$slot" ]; then
+    bootimage=`find /dev/block -iname boot$slot | head -n 1` 2>/dev/null;
+  fi;
+  if [ $? != 0 -a "$is_slot_device" == 1 ]; then
+    ui_print " "; ui_print "Unable to determine active boot slot. Aborting..."; exit 1;
+  fi;
+fi;
+
 # find the location of the boot block
 find_boot() {
-	# if we already have boot block set then verify and use it
-	if [ "$block" != "auto" ] && [ -e "`readlink -f $block`" ]; then 
-    block=`readlink -f $block`
-    return
+  # if we already have boot block set then verify and use it
+  if [ "$block" != "auto" ] && [ -e "`readlink -f $block`" ]; then
+    block=`readlink -f $block`;
+    [ "$slot" ] && test -e "$block$slot" && block=$block$slot;
+    return;
   elif [ ! -z $bootimage ]; then
-    block=$bootimage
-    return
+    block=$bootimage;
+    return;
   else
-    block=
+    block=;
   fi
   # auto-detect
-	if [ -z $block ]; then
+  if [ -z $block ]; then
     for blocks in ramdisk boot_a kern-a android_boot kernel boot lnx bootimg; do
-      block=`find /dev/block -iname $blocks | head -n 1` 2>/dev/null
-      [ ! -z $block ] && break
+      block=`find /dev/block -iname $blocks | head -n 1` 2>/dev/null;
+      [ ! -z $block ] && return;
     done
   fi
   # Recovery fallback
   if [ -z $block ]; then
     for fstabs in /fstab.* /system/vendor/etc/fstab.* /etc/*fstab*; do
-      block=`grep -v '#' $fstabs | grep -E '/boot[^a-zA-Z]' | grep -oE '/dev/[a-zA-Z0-9_./-]*'`
-      [ ! -z $block ] && break
+      block=`grep -v '#' $fstabs | grep -E '/boot[^a-zA-Z]' | grep -oE '/dev/[a-zA-Z0-9_./-]*'`;
+      [ ! -z $block ] && return;
     done
   fi
-  [ ! -z $block ] && block=`readlink -f $block`
+  [ ! -z $block ] && block=`readlink -f $block`;
   # Weird partition layouts
-	if [ -f /proc/emmc ]; then
-		# emmc layout
-		block=$(awk '$4 == "\"boot\"" {print $1}' /proc/emmc)
-		[ "$block" ] && block=/dev/block/$(echo "$block" | cut -f1 -d:) && return
-	fi
-	if [ -f /proc/mtd ]; then
-		# mtd layout
-		block=$(awk '$4 == "\"boot\"" {print $1}' /proc/mtd)
-		[ "$block" ] && block=/dev/block/$(echo "$block" | cut -f1 -d:) && if [ -f $bin/flash_erase -a -f $bin/nanddump -a -f $bin/nandwrite ]; then return; else ui_print "MTD device detected!"; abort "Required binaries missing!"; fi
-	fi
-	if [ -f /proc/dumchar_info ]; then
-		# mtk layout
-		block=$(awk '$1 == "/boot" {print $5}' /proc/dumchar_info)
-		[ "$block" ] && if [ ! -f $bin/mkmtkhdr ]; then return; else ui_print "MTK device detected!"; abort "Required binaries missing!"; fi
-	fi
-	abort "Unable to find boot block location!"
+  if [ -f /proc/emmc ]; then
+    # emmc layout
+    block=$(awk '$4 == "\"boot\"" {print $1}' /proc/emmc);
+    [ "$block" ] && block=/dev/block/$(echo "$block" | cut -f1 -d:) && return;
+  fi
+  if [ -f /proc/mtd ]; then
+    # mtd layout
+    block=$(awk '$4 == "\"boot\"" {print $1}' /proc/mtd);
+    [ "$block" ] && block=/dev/block/$(echo "$block" | cut -f1 -d:) && if [ -f $bin/flash_erase -a -f $bin/nanddump -a -f $bin/nandwrite ]; then return; else ui_print "MTD device detected!"; ui_print "Required binaries missing!"; exit 1; fi;
+  fi
+  if [ -f /proc/dumchar_info ]; then
+    # mtk layout
+    block=$(awk '$1 == "/boot" {print $5}' /proc/dumchar_info);
+    [ "$block" ] && if [ ! -f $bin/mkmtkhdr ]; then return; else ui_print "MTK device detected!"; ui_print "Required binaries missing!"; exit 1; fi;
+  fi
+  ui_print "Unable to find boot block location!";
+  exit 1;
 }
 # Slot device support
 slot_device() {
   if [ ! -z $slot ]; then           
     if [ -d $ramdisk/.subackup -o -d $ramdisk/.backup ]; then
-      patch_cmdline "skip_override" "skip_override"
+      patch_cmdline "skip_override" "skip_override";
     else
-      patch_cmdline "skip_override" ""
+      patch_cmdline "skip_override" "";
     fi
     # Overlay stuff
     if [ -d $ramdisk/.backup ]; then
-      overlay=$ramdisk/overlay
+      overlay=$ramdisk/overlay;
     elif [ -d $ramdisk/.subackup ]; then
-      overlay=$ramdisk/boot
+      overlay=$ramdisk/boot;
     fi
     for rdfile in $list; do
-      rddir=$(dirname $rdfile)
-      mkdir -p $overlay/$rddir
-      test ! -f $overlay/$rdfile && cp -rp /system/$rdfile $overlay/$rddir/
+      rddir=$(dirname $rdfile);
+      mkdir -p $overlay/$rddir;
+      test ! -f $overlay/$rdfile && cp -rp /system/$rdfile $overlay/$rddir/;
     done                       
   else
-    overlay=$ramdisk
-  fi
-}
-# Detect if boot.img is signed - credits to chainfire @xda-developers
-signedboot_check() {
-  unset LD_LIBRARY_PATH
-  BOOTSIGNATURE="/system/bin/dalvikvm -Xbootclasspath:/system/framework/core-oj.jar:/system/framework/core-libart.jar:/system/framework/conscrypt.jar:/system/framework/bouncycastle.jar -Xnodex2oat -Xnoimage-dex2oat -cp $bin/avb-signing/BootSignature_Android.jar com.android.verity.BootSignature"
-  if [ ! -f "/system/bin/dalvikvm" ]; then
-    # if we don't have dalvikvm, we want the same behavior as boot.art/oat not found
-    RET="initialize runtime"
-  else
-    RET=$($BOOTSIGNATURE -verify /tmp/anykernel/boot.img 2>&1)
-  fi
-  test ! -z $slot && RET=$($BOOTSIGNATURE -verify /tmp/anykernel/boot.img 2>&1)
-  if (`echo $RET | grep "VALID" >/dev/null 2>&1`); then
-    ui_print "Signed boot img detected!"
-    SIGNED=true
+    overlay=$ramdisk;
   fi
 }
 # dump boot and extract ramdisk
 split_boot() {
-  [ "$(awk '$4 == "\"boot\"" {print $1}' /proc/mtd)" ] && mv -f $bin/mtd* $bin;
   if [ ! -e "$(echo $block | cut -d\  -f1)" ]; then
     ui_print " "; ui_print "Invalid partition. Aborting..."; exit 1;
   fi;
@@ -212,7 +211,6 @@ unpack_ramdisk() {
 dump_boot() {
   find_boot;
   slot_device;
-  signedboot_check;
   split_boot;
   unpack_ramdisk;
 }
@@ -351,8 +349,14 @@ flash_boot() {
     fi;
     mv -f boot-new-signed.img boot-new.img;
   fi;
-  if [ ! -z $SIGNED ]; then
-    ui_print "Signing boot image..."
+  if [ -f "$bin/BootSignature_Android.jar" -a -d "$bin/avb" ]; then
+    if [ -f "/system/system/bin/dalvikvm" ]; then
+      umount /system;
+      umount /system 2>/dev/null;
+      mkdir /system_root;
+      mount -o ro -t auto /dev/block/bootdevice/by-name/system$slot /system_root;
+      mount -o bind /system_root/system /system;
+    fi;
     pk8=`ls $bin/avb/*.pk8`;
     cert=`ls $bin/avb/*.x509.*`;
     case $block in
@@ -361,12 +365,21 @@ flash_boot() {
     esac;
     savedpath="$LD_LIBRARY_PATH";
     unset LD_LIBRARY_PATH;
-    /system/bin/dalvikvm -Xbootclasspath:/system/framework/core-oj.jar:/system/framework/core-libart.jar:/system/framework/conscrypt.jar:/system/framework/bouncycastle.jar -Xnodex2oat -Xnoimage-dex2oat -cp $bin/BootSignature_Android.jar com.android.verity.BootSignature /$avbtype boot-new.img $pk8 $cert boot-new-signed.img;
-    if [ $? != 0 ]; then
-      ui_print " "; ui_print "Signing image failed. Aborting..."; exit 1;
+    if [ "$(/system/bin/dalvikvm -Xbootclasspath:/system/framework/core-oj.jar:/system/framework/core-libart.jar:/system/framework/conscrypt.jar:/system/framework/bouncycastle.jar -Xnodex2oat -Xnoimage-dex2oat -cp $bin/BootSignature_Android.jar com.android.verity.BootSignature -verify boot.img | grep VALID)" ]; then
+      ui_print "Signing boot image...";
+      /system/bin/dalvikvm -Xbootclasspath:/system/framework/core-oj.jar:/system/framework/core-libart.jar:/system/framework/conscrypt.jar:/system/framework/bouncycastle.jar -Xnodex2oat -Xnoimage-dex2oat -cp $bin/BootSignature_Android.jar com.android.verity.BootSignature /$avbtype boot-new.img $pk8 $cert boot-new-signed.img;
+      if [ $? != 0 ]; then
+        ui_print " "; ui_print "Signing image failed. Aborting..."; exit 1;
+      fi;
+      mv -f boot-new-signed.img boot-new.img;
     fi;
     test "$savedpath" && export LD_LIBRARY_PATH="$savedpath";
-    mv -f boot-new-signed.img boot-new.img;
+    if [ -d "/system_root" ]; then
+      umount /system;
+      umount /system_root;
+      rmdir /system_root;
+      mount -o ro -t auto /system;
+    fi;
   fi;
   if [ -f "$bin/blobpack" ]; then
     printf '-SIGNED-BY-SIGNBLOB-\00\00\00\00\00\00\00\00' > boot-new-signed.img;
@@ -383,8 +396,8 @@ flash_boot() {
   if [ "$(strings /tmp/anykernel/boot.img | grep SEANDROIDENFORCE )" ]; then
     printf 'SEANDROIDENFORCE' >> boot-new.img;
   fi;
-  if [ "$(grep_prop ro.product.brand)" == "lge" ] || [ "$(grep_prop ro.product.brand)" == "LGE" ]; then 
-    case $(grep_prop ro.product.device) in
+  if [ "$(file_getprop /system/build.prop ro.product.brand)" == "lge" ] || [ "$(file_getprop /system/build.prop ro.product.brand)" == "LGE" ]; then 
+    case $(file_getprop /system/build.prop ro.product.device) in
       d800|d801|d802|d803|ls980|vs980|101f|d850|d852|d855|ls990|vs985|f400) echo -n -e "\x41\xa9\xe4\x67\x74\x4d\x1d\x1b\xa4\x29\xf2\xec\xea\x65\x52\x79" >> boot-new.img;;
     *) ;;
     esac
@@ -603,9 +616,5 @@ if [ ! -d "$ramdisk" -a ! -d "$patch" ]; then
 fi;
 test ! -d "$ramdisk" && mkdir -p $ramdisk;
 
-# grep_prop <prop name>
-grep_prop() { grep "^$1" "/system/build.prop" | cut -d= -f2; }
-
-device_check() { test "$(getprop ro.product.device)" == "$1" -o "$(getprop ro.build.product)" == "$1" && return 0 || return 1; } 
-
 ## end methods
+

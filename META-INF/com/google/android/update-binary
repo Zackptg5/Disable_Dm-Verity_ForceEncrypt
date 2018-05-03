@@ -37,53 +37,9 @@ abort() {
   if [ ! -f /tmp/anykernel/anykernel.sh -o "$(file_getprop /tmp/anykernel/anykernel.sh do.cleanuponabort 2>/dev/null)" == 1 ]; then
     cleanup;
   fi;
-  umount -l /system_root 2>/dev/null
-  umount -l /system 2>/dev/null
-  umount -l /vendor 2>/dev/null
+  umount /system;
+  umount /vendor 2>/dev/null;
   exit 1;
-}
-is_mounted() {
-  TARGET="`readlink -f $1`"
-  cat /proc/mounts | grep " $TARGET " >/dev/null
-  return $?
-}
-mount_system() {
-  # Check A/B slot
-  slot=`getprop ro.boot.slot_suffix`
-  if [ -z $slot ]; then
-    slot=_`getprop ro.boot.slot`
-    [ $slot = "_" ] && slot=
-  fi
-  # Check the boot image to make sure the slot actually make sense
-  bootimage=
-  if [ ! -z $slot ]; then
-    bootimage=`find /dev/block -iname boot$slot | head -n 1` 2>/dev/null
-  fi
-  [ -z $bootimage ] && slot=
-  # Detect dtbo
-  dtboimage=`find /dev/block -iname dtbo$slot | head -n 1` 2>/dev/null
-  [ ! -z $dtboimage ] && dtboimage=`readlink -f $dtboimage`
-  [ -z $slot ] || ui_print "- A/B partition detected, current slot: $SLOT"
-  is_mounted /system || [ -f /system/build.prop ] || mount -o rw /system 2>/dev/null
-  if ! is_mounted /system && ! [ -f /system/build.prop ]; then
-    SYSTEMBLOCK=`find /dev/block -iname system$slot | head -n 1`
-    mount -t ext4 -o rw $SYSTEMBLOCK /system
-  fi
-  is_mounted /system || [ -f /system/build.prop ] || abort "Cannot mount /system"
-  if [ -f /system/init.rc ]; then
-    mkdir /system_root 2>/dev/null
-    mount --move /system /system_root
-    mount -o bind /system_root/system /system
-  fi
-  if [ -L /system/vendor ]; then
-    # Seperate /vendor partition
-    is_mounted /vendor || mount -o rw /vendor 2>/dev/null
-    if ! is_mounted /vendor; then
-      VENDORBLOCK=`find /dev/block -iname vendor$slot | head -n 1`
-      mount -t ext4 -o rw $VENDORBLOCK /vendor
-    fi
-    is_mounted /vendor || abort "Cannot mount /vendor"
-  fi
 }
 
 ui_print " ";
@@ -94,16 +50,15 @@ unzip -o "$ZIPFILE";
 if [ $? != 0 -o -z "$(ls /tmp/anykernel/tools)" ]; then
   abort "Unzip failed. Aborting...";
 fi;
-
 bb=/tmp/anykernel/tools/busybox;
 chmod 755 $bb;
 $bb chmod -R 755 /tmp/anykernel/tools /tmp/anykernel/bin;
 
 if [ -f /tmp/anykernel/banner ]; then
-  ui_print " ";
   while IFS='' read -r line || $bb [[ -n "$line" ]]; do
     ui_print "$line";
   done < /tmp/anykernel/banner;
+  ui_print " ";
   ui_print " ";
 fi;
 
@@ -118,8 +73,12 @@ ui_print "AnyKernel2 by osm0sis @ xda-developers";
 ui_print " ";
 ui_print " ";
 
-mount_system;
+umount /system 2>/dev/null;
+umount /vendor 2>/dev/null;
+mount -o rw -t auto /system;
+mount -o rw -t auto /vendor 2>/dev/null;
 mount /data 2>/dev/null;
+test -f /system/system/build.prop && root=/system;
 
 if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.devicecheck)" == 1 ]; then
   ui_print "Checking device...";
@@ -143,7 +102,6 @@ done;
 if [ $? != 0 -o -z "$(ls /tmp/anykernel/bin)" ]; then
   abort "Recovery busybox setup failed. Aborting...";
 fi;
-sed -i -e "s|<slot>|$slot|" -e "s|<bootimage>|$bootimage|" -e "s|<dtboimage>|$dtboimage|" /tmp/anykernel/tools/ak2-core.sh
 PATH="/tmp/anykernel/bin:$PATH" $bb ash /tmp/anykernel/anykernel.sh $2;
 if [ $? != "0" ]; then
   abort;
@@ -152,6 +110,8 @@ fi;
 if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.modules)" == 1 ]; then
   ui_print " ";
   ui_print "Pushing modules...";
+  mount -o rw,remount -t auto /system;
+  mount -o rw,remount -t auto /vendor 2>/dev/null;
   cd /tmp/anykernel/modules;
   for module in $(find . -name '*.ko'); do
     case $module in
@@ -173,6 +133,8 @@ if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.modules)" == 1 ]; then
     fi;
   done;
   cd /tmp/anykernel;
+  mount -o ro,remount -t auto /system;
+  mount -o ro,remount -t auto /vendor 2>/dev/null;
 fi;
 
 debugging;
@@ -181,9 +143,8 @@ if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.cleanup)" == 1 ]; then
   cleanup;
 fi;
 
-umount -l /system_root 2>/dev/null
-umount -l /system 2>/dev/null
-umount -l /vendor 2>/dev/null
+umount /system;
+umount /vendor 2>/dev/null;
 ui_print " ";
 ui_print " ";
 ui_print "Done!";
