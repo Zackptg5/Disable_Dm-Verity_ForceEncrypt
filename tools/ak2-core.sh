@@ -5,7 +5,9 @@ bin=/tmp/anykernel/tools;
 split_img=/tmp/anykernel/split_img;
 patch=/tmp/anykernel/patch;
 slot=<slot>;
+bootimage=<bootimage>;
 dtboimage=<dtboimage>;
+abi=<abi>;
 
 chmod -R 755 $bin;
 mkdir -p $split_img;
@@ -35,39 +37,45 @@ reset_ak() {
 # find the location of the boot block
 find_boot() {
 	# if we already have boot block set then verify and use it
-	[ "$block" == "auto" ] || return
-	# otherwise, time to go hunting!
-	if [ -f /etc/recovery.fstab ]; then
-		# recovery fstab v1
-		block=$(awk '$1 == "/boot" {print $3}' /etc/recovery.fstab)
-		[ "$block" ]  && return
-		# recovery fstab v2
-		block=$(awk '$2 == "/boot" {print $1}' /etc/recovery.fstab)
-		[ "$block" ]  && return
-	fi
-	for fstab in /fstab.*; do
-		[ -f "$fstab" ] || continue
-		# device fstab v2
-		block=$(awk '$2 == "/boot" {print $1}' "$fstab")
-		[ "$block" ]  && return
-		# device fstab v1
-		block=$(awk '$1 == "/boot" {print $3}' "$fstab")
-		[ "$block" ]  && return
-	done
+	if [ "$block" != "auto" ] && [ -e "`readlink -f $block`" ]; then 
+    block=`readlink -f $block`
+    return
+  elif [ ! -z $bootimage ]; then
+    block=$bootimage
+    return
+  else
+    block=
+  fi
+  # auto-detect
+	if [ -z $block ]; then
+    for blocks in ramdisk boot_a kern-a android_boot kernel boot lnx bootimg; do
+      block=`find /dev/block -iname $blocks | head -n 1` 2>/dev/null
+      [ ! -z $block ] && break
+    done
+  fi
+  # Recovery fallback
+  if [ -z $block ]; then
+    for fstabs in /fstab.* /system/vendor/etc/fstab.* /etc/*fstab*; do
+      block=`grep -v '#' $fstabs | grep -E '/boot[^a-zA-Z]' | grep -oE '/dev/[a-zA-Z0-9_./-]*'`
+      [ ! -z $block ] && break
+    done
+  fi
+  [ ! -z $block ] && block=`readlink -f $block`
+  # Weird partition layouts
 	if [ -f /proc/emmc ]; then
 		# emmc layout
 		block=$(awk '$4 == "\"boot\"" {print $1}' /proc/emmc)
-		[ "$block" ] && block=/dev/block/$(echo "$block" | cut -f1 -d:)  && return
+		[ "$block" ] && block=/dev/block/$(echo "$block" | cut -f1 -d:) && return
 	fi
 	if [ -f /proc/mtd ]; then
 		# mtd layout
 		block=$(awk '$4 == "\"boot\"" {print $1}' /proc/mtd)
-		[ "$block" ] && block=/dev/block/$(echo "$block" | cut -f1 -d:)  && return
+		[ "$block" ] && block=/dev/block/$(echo "$block" | cut -f1 -d:) && if [ -f $bin/flash_erase -a -f $bin/nanddump -a -f $bin/nandwrite ]; then return; else ui_print "MTD device detected!"; abort "Required binaries missing!"; fi
 	fi
 	if [ -f /proc/dumchar_info ]; then
 		# mtk layout
 		block=$(awk '$1 == "/boot" {print $5}' /proc/dumchar_info)
-		[ "$block" ]  && return
+		[ "$block" ] && if [ ! -f $bin/mkmtkhdr ]; then return; else ui_print "MTK device detected!"; abort "Required binaries missing!"; fi
 	fi
 	abort "Unable to find boot block location!"
 }
@@ -112,6 +120,7 @@ signedboot_check() {
 }
 # dump boot and extract ramdisk
 split_boot() {
+  [ "$(awk '$4 == "\"boot\"" {print $1}' /proc/mtd)" ] && mv -f $bin/mtd* $bin;
   if [ ! -e "$(echo $block | cut -d\  -f1)" ]; then
     ui_print " "; ui_print "Invalid partition. Aborting..."; exit 1;
   fi;
