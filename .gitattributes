@@ -2,4 +2,3 @@
 *.sh text eol=lf
 *.md text eol=lf
 META-INF/** text eol=lf
-patch/** text eol=lf
