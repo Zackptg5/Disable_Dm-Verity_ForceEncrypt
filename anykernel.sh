@@ -90,17 +90,20 @@ done
 $found_fstab || ui_print "Unable to find the fstab!"
 
 # Remove Samsung RKP in stock kernel
-[ -f $overlay/kernel ] && sed -i 's/\x49\x01\x00\x54\x01\x14\x40\xB9\x3F\xA0\x0F\x71\xE9\x00\x00\x54\x01\x08\x40\xB9\x3F\xA0\x0F\x71\x89\x00\x00\x54\x00\x18\x40\xB9\x1F\xA0\x0F\x71\x88\x01\x00\x54/\xA1\x02\x00\x54\x01\x14\x40\xB9\x3F\xA0\x0F\x71\x40\x02\x00\x54\x01\x08\x40\xB9\x3F\xA0\x0F\x71\xE0\x01\x00\x54\x00\x18\x40\xB9\x1F\xA0\x0F\x71\x81\x01\x00\x54/' $overlay/kernel
+if [ -f $overlay/kernel ]; then
+  xxd -p $overlay/kernel | sed 's/49010054011440B93FA00F71E9000054010840B93FA00F7189000054001840B91FA00F7188010054/A1020054011440B93FA00F7140020054010840B93FA00F71E0010054001840B91FA00F7181010054/' | xxd -r -p > $overlay/kernel.tmp
+  mv -f $overlay/kernel.tmp $overlay/kernel
+fi
 
 # remove dm_verity from dtb and dtbo
 for dtbs in $split_img/boot.img-zImage $overlay/dtb /tmp/anykernel/dtbo.img; do
   [ -f $dtbs ] || continue
-  if [ "$(sed -n '/\x76\x65\x72\x69\x66\x79/p' $dtbs)" ]; then
+  if [ "$(sed -n '/766572696679/p' $dtbs)" ]; then
     ui_print "Patching $(basename $dtbs) to remove dm-verity..."
-    sed -i -e 's/\x2c\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79\x2c/\x00\x00\x00\x00\x00\x00\x00/g' -e 's/\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00/g' $dtbs
+    xxd -p $dtbs | sed -e 's/2c766572696679/00000000000000/g' -e 's/7665726966792c/00000000000000/g' -e 's/766572696679/000000000000/g' | xxd -r -p > $dtbs.tmp
+    mv -f $dtbs.tmp $dtbs
   fi
 done
-
 # end ramdisk changes
 
 ui_print " "
