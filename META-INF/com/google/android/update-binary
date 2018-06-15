@@ -17,7 +17,7 @@ file_getprop() { grep "^$2=" "$1" | cut -d= -f2; }
 if [ ! "$(getprop 2>/dev/null)" ]; then
   getprop() {
     local propval="$(file_getprop /default.prop $1 2>/dev/null)";
-    test "$propval" || local propval="$(file_getprop /system/build.prop $1 2>/dev/null)";
+    test "$propval" || local propval="$(file_getprop $root/system/build.prop $1 2>/dev/null)";
     test "$propval" && echo "$propval" || echo "";
   }
 fi;
@@ -39,9 +39,11 @@ abort() {
   fi;
   umount /system;
   umount /vendor 2>/dev/null;
+  # umount /data 2>/dev/null;
   exit 1;
 }
 
+# show_progress 1.34 4;
 ui_print " ";
 cleanup;
 mkdir -p /tmp/anykernel/bin;
@@ -62,7 +64,7 @@ if [ -f /tmp/anykernel/banner ]; then
   ui_print " ";
 fi;
 
-#ui_print "$(file_getprop /tmp/anykernel/anykernel.sh kernel.string)";
+# ui_print "$(file_getprop /tmp/anykernel/anykernel.sh kernel.string)";
 if [ -f /tmp/anykernel/version ]; then
   ui_print " ";
   ui_print "$(cat /tmp/anykernel/version)";
@@ -87,7 +89,6 @@ if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.devicecheck)" == 1 ]; then
     if [ "$(getprop ro.product.device)" == "$testname" -o "$(getprop ro.build.product)" == "$testname" ]; then
       ui_print "$testname";
       match=1;
-      break;
     fi;
   done;
   ui_print " ";
@@ -96,6 +97,7 @@ if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.devicecheck)" == 1 ]; then
   fi;
 fi;
 
+# ui_print "Installing...";
 for i in $($bb --list); do
   $bb ln -s $bb /tmp/anykernel/bin/$i;
 done;
@@ -145,6 +147,7 @@ fi;
 
 umount /system;
 umount /vendor 2>/dev/null;
+# umount /data 2>/dev/null;
 ui_print " ";
 ui_print " ";
 ui_print "Done!";

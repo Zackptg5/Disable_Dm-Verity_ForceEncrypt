@@ -3,7 +3,7 @@
 
 ## AnyKernel setup
 # begin properties
-properties() {
+properties() {'
 kernel.string=Dm-Verity and Forced Encryption Disabler
 do.devicecheck=0
 do.modules=0
@@ -14,12 +14,12 @@ device.name2=
 device.name3=
 device.name4=
 device.name5=
-} # end properties
+';} # end properties
 
 # shell variables
-ramdisk_compression=auto;
+block=auto;                                                         
 is_slot_device=auto;
-block=auto;
+ramdisk_compression=auto;
 
 
 ## AnyKernel methods (DO NOT CHANGE)

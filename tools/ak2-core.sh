@@ -365,15 +365,15 @@ flash_boot() {
     esac;
     savedpath="$LD_LIBRARY_PATH";
     unset LD_LIBRARY_PATH;
-    if [ "$(/system/bin/dalvikvm -Xbootclasspath:/system/framework/core-oj.jar:/system/framework/core-libart.jar:/system/framework/conscrypt.jar:/system/framework/bouncycastle.jar -Xnodex2oat -Xnoimage-dex2oat -cp $bin/BootSignature_Android.jar com.android.verity.BootSignature -verify boot.img | grep VALID)" ]; then
+    if [ "$(/system/bin/dalvikvm -Xbootclasspath:/system/framework/core-oj.jar:/system/framework/core-libart.jar:/system/framework/conscrypt.jar:/system/framework/bouncycastle.jar -Xnodex2oat -Xnoimage-dex2oat -cp $bin/BootSignature_Android.jar com.android.verity.BootSignature -verify boot.img 2>&1 | grep VALID)" ]; then
       ui_print "Signing boot image...";
       /system/bin/dalvikvm -Xbootclasspath:/system/framework/core-oj.jar:/system/framework/core-libart.jar:/system/framework/conscrypt.jar:/system/framework/bouncycastle.jar -Xnodex2oat -Xnoimage-dex2oat -cp $bin/BootSignature_Android.jar com.android.verity.BootSignature /$avbtype boot-new.img $pk8 $cert boot-new-signed.img;
       if [ $? != 0 ]; then
         ui_print " "; ui_print "Signing image failed. Aborting..."; exit 1;
       fi;
-      mv -f boot-new-signed.img boot-new.img;
     fi;
     test "$savedpath" && export LD_LIBRARY_PATH="$savedpath";
+    mv -f boot-new-signed.img boot-new.img;
     if [ -d "/system_root" ]; then
       umount /system;
       umount /system_root;
