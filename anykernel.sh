@@ -37,6 +37,10 @@ chown -R root:root $ramdisk/*;
 ui_print "Unpacking boot image..."
 ui_print " "
 dump_boot;
+
+# Use toybox xxd
+alias xxd='/system/bin/xxd'
+
 # Detect dtbo
 dtboimage=`find /dev/block -iname dtbo$slot | head -n 1` 2>/dev/null;
 [ -z $dtboimage ] || { dtboimage=`readlink -f $dtboimage`; cp -f $dtboimage /tmp/anykernel/dtbo.img; }
@@ -88,6 +92,7 @@ for fstab in $fstabs; do
 	found_fstab=true
 done
 $found_fstab || ui_print "Unable to find the fstab!"
+ui_print " "
 
 # Remove Samsung RKP in stock kernel
 if [ -f $overlay/kernel ]; then
@@ -96,7 +101,8 @@ if [ -f $overlay/kernel ]; then
 fi
 
 # remove dm_verity from dtb and dtbo
-for dtbs in $split_img/boot.img-zImage $overlay/dtb /tmp/anykernel/dtbo.img; do
+[ -f $split_img/boot.img-zImage ] && cp -f $split_img/boot.img-zImage /tmp/anykernel/boot.img-zImage
+for dtbs in /tmp/anykernel/boot.img-zImage $overlay/dtb /tmp/anykernel/dtbo.img; do
   [ -f $dtbs ] || continue
   xxd -p $dtbs | [ "$(sed -n '/766572696679/p')" ] && VERITY=true
   if $VERITY; then
