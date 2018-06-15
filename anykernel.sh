@@ -3,7 +3,7 @@
 
 ## AnyKernel setup
 # begin properties
-properties() {'
+properties() { '
 kernel.string=Dm-Verity and Forced Encryption Disabler
 do.devicecheck=0
 do.modules=0
@@ -14,7 +14,7 @@ device.name2=
 device.name3=
 device.name4=
 device.name5=
-';} # end properties
+'; } # end properties
 
 # shell variables
 block=auto;                                                         
@@ -98,7 +98,8 @@ fi
 # remove dm_verity from dtb and dtbo
 for dtbs in $split_img/boot.img-zImage $overlay/dtb /tmp/anykernel/dtbo.img; do
   [ -f $dtbs ] || continue
-  if [ "$(sed -n '/766572696679/p' $dtbs)" ]; then
+  xxd -p $dtbs | [ "$(sed -n '/766572696679/p')" ] && VERITY=true
+  if $VERITY; then
     ui_print "Patching $(basename $dtbs) to remove dm-verity..."
     xxd -p $dtbs | sed -e 's/2c766572696679/00000000000000/g' -e 's/7665726966792c/00000000000000/g' -e 's/766572696679/000000000000/g' | xxd -r -p > $dtbs.tmp
     mv -f $dtbs.tmp $dtbs
