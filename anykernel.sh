@@ -49,7 +49,6 @@ esac
 # Detect dtbo and move verity containing images to proper place for ak2
 dtboimage=`find /dev/block -iname dtbo$slot | head -n 1` 2>/dev/null;
 [ -z $dtboimage ] || { dtboimage=`readlink -f $dtboimage`; cp -f $dtboimage /tmp/anykernel/dtbo.img; }
-[ -f $split_img/boot.img-zImage ] && cp -f $split_img/boot.img-zImage /tmp/anykernel/boot.img-zImage
 
 
 # begin ramdisk changes
@@ -79,9 +78,9 @@ found_fstab=false
 printed=false
 for fstab in $fstabs; do
 	[ "$fstab" == "default.prop" ] && continue
-  $printed || { ui_print "Disabling dm_verity and forced encryption in the fstab..."; printed=true; }
+  $printed || { ui_print "Disabling dm_verity & forced encryption in fstabs..."; printed=true; }
   if [ "$overlay" ]; then tmp=$(echo $fstab | sed "s|$overlay||"); else tmp=$fstab; fi
-  ui_print "  Found fstab: $tmp"
+  ui_print "  Patching: $tmp"
 	sed -i "s/\b\(forceencrypt\|forcefdeorfbe\|fileencryption\)=/encryptable=/g" "$fstab"
   sed -i "
 		s/,verify\b//g
@@ -93,7 +92,7 @@ for fstab in $fstabs; do
 	" "$fstab"
 	found_fstab=true
 done
-$found_fstab || ui_print "Unable to find the fstab!"
+$found_fstab || ui_print "Unable to find any fstabs!"
 ui_print " "
 
 # disable dm_verity in init files
@@ -111,7 +110,7 @@ if [ -f $overlay\kernel ]; then
 fi
 
 # remove dm_verity from dtb and dtbo
-for dtbs in /tmp/anykernel/boot.img-zImage $overlay\dtb /tmp/anykernel/dtbo.img; do
+for dtbs in $split_img/boot.img-zImage $overlay\dtb /tmp/anykernel/dtbo /tmp/anykernel/dtbo.img; do
   [ -f $dtbs ] || continue
   ui_print "Patching $(basename $dtbs) to remove dm-verity..."
   bbe -e "s/\x2c\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00\x00/" -e "s/\x76\x65\x72\x69\x66\x79\x2c/\x00\x00\x00\x00\x00\x00\x00/" -e "s/\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00/" -o $dtbs.tmp $dtbs
