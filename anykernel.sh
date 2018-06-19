@@ -62,6 +62,7 @@ if [ $(file_getprop /system/build.prop ro.build.version.sdk) -ge 26 ]; then
     [ -f "$i" ] || continue
     fstabs="${fstabs} $i"
   done
+else
   list="${list} default.prop"
   patch_prop $overlay\default.prop ro.config.dmverity false
   rm -f verity_key sbin/firmware_key.cer
