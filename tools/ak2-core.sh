@@ -96,7 +96,7 @@ find_boot() {
 }
 # Slot device support
 slot_device() {
-  if [ ! -z $slot ]; then           
+  if [ ! -z $SLOT ]; then           
     if [ -d $ramdisk/.subackup -o -d $ramdisk/.backup ]; then
       patch_cmdline "skip_override" "skip_override";
     else
@@ -104,17 +104,15 @@ slot_device() {
     fi
     # Overlay stuff
     if [ -d $ramdisk/.backup ]; then
-      overlay=$ramdisk/overlay;
+      overlay=$ramdisk/overlay/;
     elif [ -d $ramdisk/.subackup ]; then
-      overlay=$ramdisk/boot;
+      overlay=$ramdisk/boot/;
     fi
     for rdfile in $list; do
       rddir=$(dirname $rdfile);
-      mkdir -p $overlay/$rddir;
-      test ! -f $overlay/$rdfile && cp -rp /system/$rdfile $overlay/$rddir/;
-    done                       
-  else
-    overlay=$ramdisk;
+      mkdir -p $overlay$rddir;
+      test ! -f $overlay$rdfile && cp -rp /system/$rdfile $overlay$rddir/;
+    done
   fi
 }
 # dump boot and extract ramdisk
@@ -371,9 +369,9 @@ flash_boot() {
       if [ $? != 0 ]; then
         ui_print " "; ui_print "Signing image failed. Aborting..."; exit 1;
       fi;
+      mv -f boot-new-signed.img boot-new.img;
     fi;
     test "$savedpath" && export LD_LIBRARY_PATH="$savedpath";
-    mv -f boot-new-signed.img boot-new.img;
     if [ -d "/system_root" ]; then
       umount /system;
       umount /system_root;

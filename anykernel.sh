@@ -38,19 +38,25 @@ ui_print "Unpacking boot image..."
 ui_print " "
 dump_boot;
 
-# Use toybox xxd
-alias xxd='/system/bin/xxd'
+# Set bbe alias
+case $(file_getprop /system/build.prop ro.product.cpu.abi) in
+  x86_64*) alias bbe='$bin/x86_64/bbe';;
+  x86*) alias bbe='$bin/x86/bbe';;
+  arm64*) alias bbe='$bin/arm64/bbe';;
+  *) alias bbe='$bin/arm/bbe';;
+esac
 
-# Detect dtbo
+# Detect dtbo and move verity containing images to proper place for ak2
 dtboimage=`find /dev/block -iname dtbo$slot | head -n 1` 2>/dev/null;
 [ -z $dtboimage ] || { dtboimage=`readlink -f $dtboimage`; cp -f $dtboimage /tmp/anykernel/dtbo.img; }
+[ -f $split_img/boot.img-zImage ] && cp -f $split_img/boot.img-zImage /tmp/anykernel/boot.img-zImage
 
 
 # begin ramdisk changes
 for i in fstab.*; do
   [ -f "$i" ] || continue
   list="${list} $i"
-  fstabs="${fstabs} $overlay/$i"
+  fstabs="${fstabs} $overlay$i"
 done
 if [ $(file_getprop /system/build.prop ro.build.version.sdk) -ge 26 ]; then
   for i in /system/vendor/etc/fstab.*; do
@@ -58,30 +64,26 @@ if [ $(file_getprop /system/build.prop ro.build.version.sdk) -ge 26 ]; then
     fstabs="${fstabs} $i"
   done
   list="${list} default.prop"
-  patch_prop $overlay/default.prop ro.config.dmverity false
+  patch_prop $overlay\default.prop ro.config.dmverity false
   rm -f verity_key sbin/firmware_key.cer
 fi
 [ -f dtb ] && list="${list} dtb"
 [ -f kernel ] && list="${list} kernel"
+inits="$(find . -maxdepth 1 -type f -name "*.rc")"
+list="${list} $inits"
 
-ui_print "Disabling forced encryption in the fstab..."
+fstabs="$(echo $fstabs | sed -r "s|^ (.*)|\1|")"
+list="$(echo $list | sed -r -e "s|^ (.*)|\1|" -e "s| ./| |g")"
+
 found_fstab=false
+printed=false
 for fstab in $fstabs; do
 	[ "$fstab" == "default.prop" ] && continue
-  ui_print "  Found fstab: $(echo $fstab | sed "s|$overlay||")"
-	sed -i "
-		s/\b\(forceencrypt\|forcefdeorfbe\|fileencryption\)=/encryptable=/g
-	" "$fstab"
-	found_fstab=true
-done
-$found_fstab || ui_print "Unable to find the fstab!"
-
-ui_print "Disabling dm-verity in the fstab..."
-found_fstab=false
-for fstab in $fstabs; do
-  [ "$fstab" == "default.prop" ] && continue
-	ui_print "  Found fstab: $(echo $fstab | sed "s|$overlay||")"
-	sed -i "
+  $printed || { ui_print "Disabling dm_verity and forced encryption in the fstab..."; printed=true; }
+  if [ "$overlay" ]; then tmp=$(echo $fstab | sed "s|$overlay||"); else tmp=$fstab; fi
+  ui_print "  Found fstab: $tmp"
+	sed -i "s/\b\(forceencrypt\|forcefdeorfbe\|fileencryption\)=/encryptable=/g" "$fstab"
+  sed -i "
 		s/,verify\b//g
 		s/\bverify,//g
 		s/\bverify\b//g
@@ -94,23 +96,28 @@ done
 $found_fstab || ui_print "Unable to find the fstab!"
 ui_print " "
 
+# disable dm_verity in init files
+ui_print "Disabling dm_verity in init files..." # TEST IF WILDCARD STUFF WORKS
+ui_print " "
+for i in $overlay${inits}; do
+  replace_string $i "# *verity_load_state" "\( *\)verity_load_state" "#\1verity_load_state";
+  replace_string $i "# *verity_update_state" "\( *\)verity_update_state" "#\1verity_update_state";
+done
+
 # Remove Samsung RKP in stock kernel
-if [ -f $overlay/kernel ]; then
-  xxd -p $overlay/kernel | sed 's/49010054011440B93FA00F71E9000054010840B93FA00F7189000054001840B91FA00F7188010054/A1020054011440B93FA00F7140020054010840B93FA00F71E0010054001840B91FA00F7181010054/' | xxd -r -p > $overlay/kernel.tmp
-  mv -f $overlay/kernel.tmp $overlay/kernel
+if [ -f $overlay\kernel ]; then
+  bbe -e "s/\x49\x01\x00\x54\x01\x14\x40\xB9\x3F\xA0\x0F\x71\xE9\x00\x00\x54\x01\x08\x40\xB9\x3F\xA0\x0F\x71\x89\x00\x00\x54\x11\x00\x18\x40\xB9\x1F\xA0\x0F\x71\x88\x01\x00\x54/\xA1\x02\x00\x54\x01\x14\x40\xB9\x3F\xA0\x0F\x71\x40\x02\x00\x54\x01\x08\x40\xB9\x3F\xA0\x0F\x71\xE0\x01\x00\x54\x00\x18\x40\xB9\x1F\xA0\x0F\x71\x81\x01\x00\x54/" -o $overlaykernel.tmp $overlaykernel
+  mv -f $overlay\kernel.tmp $overlay\kernel
 fi
 
 # remove dm_verity from dtb and dtbo
-[ -f $split_img/boot.img-zImage ] && cp -f $split_img/boot.img-zImage /tmp/anykernel/boot.img-zImage
-for dtbs in /tmp/anykernel/boot.img-zImage $overlay/dtb /tmp/anykernel/dtbo.img; do
+for dtbs in /tmp/anykernel/boot.img-zImage $overlay\dtb /tmp/anykernel/dtbo.img; do
   [ -f $dtbs ] || continue
-  xxd -p $dtbs | [ "$(sed -n '/766572696679/p')" ] && VERITY=true
-  if $VERITY; then
-    ui_print "Patching $(basename $dtbs) to remove dm-verity..."
-    xxd -p $dtbs | sed -e 's/2c766572696679/00000000000000/g' -e 's/7665726966792c/00000000000000/g' -e 's/766572696679/000000000000/g' | xxd -r -p > $dtbs.tmp
-    mv -f $dtbs.tmp $dtbs
-  fi
+  ui_print "Patching $(basename $dtbs) to remove dm-verity..."
+  bbe -e "s/\x2c\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00\x00/" -e "s/\x76\x65\x72\x69\x66\x79\x2c/\x00\x00\x00\x00\x00\x00\x00/" -e "s/\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00/" -o $dtbs.tmp $dtbs
+  mv -f $dtbs.tmp $dtbs
 done
+
 # end ramdisk changes
 
 ui_print " "
