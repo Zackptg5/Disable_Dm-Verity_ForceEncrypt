@@ -38,15 +38,13 @@ ui_print "Unpacking boot image..."
 ui_print " "
 dump_boot;
 
-# Set bbe alias
+# Set magiskboot alias
 case $(file_getprop /system/build.prop ro.product.cpu.abi) in
-  x86_64*) alias bbe='$bin/x86_64/bbe';;
-  x86*) alias bbe='$bin/x86/bbe';;
-  arm64*) alias bbe='$bin/arm64/bbe';;
-  *) alias bbe='$bin/arm/bbe';;
+  x86*) alias magiskboot='$bin/x86/magiskboot';;
+  *) alias magiskboot='$bin/arm/magiskboot';;
 esac
 
-# Detect dtbo and move verity containing images to proper place for ak2
+# Detect dtbo and move to proper place for ak2
 dtboimage=`find /dev/block -iname dtbo$slot | head -n 1` 2>/dev/null;
 [ -z $dtboimage ] || { dtboimage=`readlink -f $dtboimage`; cp -f $dtboimage /tmp/anykernel/dtbo.img; }
 
@@ -97,26 +95,38 @@ $found_fstab || ui_print "Unable to find any fstabs!"
 ui_print " "
 
 # disable dm_verity in init files
-ui_print "Disabling dm_verity in init files..." # TEST IF WILDCARD STUFF WORKS
+ui_print "Disabling dm_verity in init files..."
 ui_print " "
 for i in $overlay${inits}; do
   replace_string $i "# *verity_load_state" "\( *\)verity_load_state" "#\1verity_load_state";
   replace_string $i "# *verity_update_state" "\( *\)verity_update_state" "#\1verity_update_state";
 done
 
+# Temporarily block out all custom recovery binaries/libs
+mv /sbin /sbin_tmp;
+# Unset library paths
+OLD_LD_LIB=$LD_LIBRARY_PATH;
+OLD_LD_PRE=$LD_PRELOAD;
+unset LD_LIBRARY_PATH;
+unset LD_PRELOAD;
+
 # Remove Samsung RKP in stock kernel
 if [ -f $overlay\kernel ]; then
-  bbe -e "s/\x49\x01\x00\x54\x01\x14\x40\xB9\x3F\xA0\x0F\x71\xE9\x00\x00\x54\x01\x08\x40\xB9\x3F\xA0\x0F\x71\x89\x00\x00\x54\x11\x00\x18\x40\xB9\x1F\xA0\x0F\x71\x88\x01\x00\x54/\xA1\x02\x00\x54\x01\x14\x40\xB9\x3F\xA0\x0F\x71\x40\x02\x00\x54\x01\x08\x40\xB9\x3F\xA0\x0F\x71\xE0\x01\x00\x54\x00\x18\x40\xB9\x1F\xA0\x0F\x71\x81\x01\x00\x54/" -o $overlaykernel.tmp $overlaykernel
-  mv -f $overlay\kernel.tmp $overlay\kernel
+  magiskboot --hexpatch $overlay\kernel \
+  49010054011440B93FA00F71E9000054010840B93FA00F7189000054001840B91FA00F7188010054 \
+  A1020054011440B93FA00F7140020054010840B93FA00F71E0010054001840B91FA00F7181010054
 fi
 
 # remove dm_verity from dtb and dtbo
-for dtbs in $split_img/boot.img-zImage $overlay\dtb /tmp/anykernel/dtbo /tmp/anykernel/dtbo.img; do
+for dtbs in $overlay\dtb /tmp/anykernel/dtbo /tmp/anykernel/dtbo.img $(ls *-dtb); do
   [ -f $dtbs ] || continue
-  ui_print "Patching $(basename $dtbs) to remove dm-verity..."
-  bbe -e "s/\x2c\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00\x00/" -e "s/\x76\x65\x72\x69\x66\x79\x2c/\x00\x00\x00\x00\x00\x00\x00/" -e "s/\x76\x65\x72\x69\x66\x79/\x00\x00\x00\x00\x00\x00/" -o $dtbs.tmp $dtbs
-  mv -f $dtbs.tmp $dtbs
+  ui_print "Patching fstab in $(basename $dtbs) to remove dm-verity..."
+  magiskboot --dtb-patch $dtbs
 done
+
+mv /sbin_tmp /sbin 2>/dev/null;
+[ -z $OLD_LD_LIB ] || export LD_LIBRARY_PATH=$OLD_LD_LIB;
+[ -z $OLD_LD_PRE ] || export LD_PRELOAD=$OLD_LD_PRE;
 
 # end ramdisk changes
 
