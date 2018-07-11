@@ -95,9 +95,9 @@ $found_fstab || ui_print "Unable to find any fstabs!"
 ui_print " "
 
 # disable dm_verity in init files
-ui_print "Disabling dm_verity in init files..."
-ui_print " "
+printed=false
 for i in $overlay${inits}; do
+  $printed || { ui_print "Disabling dm_verity in init files..."; ui_print " "; printed=true; }
   replace_string $i "# *verity_load_state" "\( *\)verity_load_state" "#\1verity_load_state";
   replace_string $i "# *verity_update_state" "\( *\)verity_update_state" "#\1verity_update_state";
 done
