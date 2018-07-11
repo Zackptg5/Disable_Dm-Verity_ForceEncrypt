@@ -120,7 +120,7 @@ fi
 # remove dm_verity from dtb and dtbo
 for dtbs in $overlay\dtb /tmp/anykernel/dtbo /tmp/anykernel/dtbo.img $(ls *-dtb); do
   [ -f $dtbs ] || continue
-  ui_print "Patching fstab in $(basename $dtbs) to remove dm-verity..."
+  ui_print "Removing dm-verity from $(basename $dtbs)..."
   magiskboot --dtb-patch $dtbs
 done
 
