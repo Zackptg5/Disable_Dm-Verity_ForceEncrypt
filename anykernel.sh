@@ -80,14 +80,18 @@ for fstab in $fstabs; do
   $printed || { ui_print "Disabling dm_verity & forced encryption in fstabs..."; printed=true; }
   if [ "$overlay" ]; then tmp=$(echo $fstab | sed "s|$overlay||"); else tmp=$fstab; fi
   ui_print "  Patching: $tmp"
-	sed -i "s/\b\(forceencrypt\|forcefdeorfbe\|fileencryption\)=/encryptable=/g" "$fstab"
   sed -i "
-		s/,verify\b//g
-		s/\bverify,//g
-		s/\bverify\b//g
-		s/,support_scfs\b//g
-		s/\bsupport_scfs,//g
-		s/\bsupport_scfs\b//g
+    s/forceencrypt=/encryptable=/g
+    s/forcefdeorfbe=/encryptable=/g
+    s/fileencryption=/encryptable=/g
+  " "$fstab"
+  sed -i "
+		s/,verify//g
+		s/verify,//g
+		s/verify\b//g
+		s/,support_scfs//g
+		s/support_scfs,//g
+		s/support_scfs\b//g
 	" "$fstab"
 	found_fstab=true
 done
