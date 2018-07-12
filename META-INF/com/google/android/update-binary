@@ -86,11 +86,10 @@ ui_print " ";
 umount /system 2>/dev/null;
 umount /vendor 2>/dev/null;
 mount -o rw -t auto /system;
-mount -o rw -t auto /vendor 2>/dev/null;
+[ -L /system/vendor ] && mount -o rw -t auto /vendor 2>/dev/null;
 mount /data 2>/dev/null;
 test -f /system/system/build.prop && root=/system;
 # Test for treble device with non-treble rom
-[ -L /system/vendor ] && [ "$(grep_prop ro.build.treble)" != "true" ] && [ ! "$(grep ro.vendor.build.fingerprint /vendor/build.prop)" ] && umount /vendor 2>/dev/null
 
 if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.devicecheck)" == 1 ]; then
   ui_print "Checking device...";
