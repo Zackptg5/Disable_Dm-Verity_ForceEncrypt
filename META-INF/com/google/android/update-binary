@@ -57,6 +57,7 @@ umount /vendor 2>/dev/null;
 mount -o rw -t auto /system;
 [ -L /system/vendor ] && mount -o rw -t auto /vendor 2>/dev/null;
 mount /data 2>/dev/null;
+mount -o bind /dev/urandom /dev/random
 test -f /system/system/build.prop && root=/system;
 case $(file_getprop /system/build.prop ro.product.cpu.abi) in
   x86*) mv -f /tmp/anykernel/tools/x86/* /tmp/anykernel/tools/;;
@@ -152,6 +153,7 @@ fi;
 
 umount /system;
 umount /vendor 2>/dev/null;
+umount -l /dev/random 2>/dev/null
 # umount /data 2>/dev/null;
 ui_print " ";
 ui_print " ";

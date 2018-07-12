@@ -50,7 +50,7 @@ for i in fstab.*; do
   fstabs="${fstabs} $overlay$i"
 done
 if [ $(file_getprop /system/build.prop ro.build.version.sdk) -ge 26 ]; then
-  for i in /system/vendor/etc/fstab.*; do
+  for i in /system/vendor/etc/fstab*; do
     [ -f "$i" ] || continue
     fstabs="${fstabs} $i"
   done
@@ -60,6 +60,7 @@ else
   rm -f verity_key sbin/firmware_key.cer
 fi
 [ -f dtb ] && list="${list} dtb"
+[ -f extra ] && list="${list} extra"
 [ -f kernel ] && list="${list} kernel"
 inits="$(find . -maxdepth 1 -type f -name "*.rc")"
 list="${list} $inits"
@@ -117,15 +118,16 @@ if [ -f $overlay\kernel ]; then
 fi
 
 # remove dm_verity from dtb and dtbo
-for dtbs in $overlay\dtb /tmp/anykernel/dtbo /tmp/anykernel/dtbo.img $(ls *-dtb 2>/dev/null); do
+for dtbs in $overlay\dtb $overlay\extra /tmp/anykernel/dtbo /tmp/anykernel/dtbo.img $(ls *-dtb 2>/dev/null); do
   [ -f $dtbs ] || continue
   ui_print "Removing dm-verity from $(basename $dtbs)..."
   magiskboot --dtb-patch $dtbs
 done
 
 mv /sbin_tmp /sbin 2>/dev/null;
-[ -z $OLD_LD_LIB ] || export LD_LIBRARY_PATH=$OLD_LD_LIB;
-[ -z $OLD_LD_PRE ] || export LD_PRELOAD=$OLD_LD_PRE;
+[ -z $OLD_PATH ] || export PATH=$OLD_PATH
+[ -z $OLD_LD_LIB ] || export LD_LIBRARY_PATH=$OLD_LD_LIB
+[ -z $OLD_LD_PRE ] || export LD_PRELOAD=$OLD_LD_PRE
 
 # end ramdisk changes
 
