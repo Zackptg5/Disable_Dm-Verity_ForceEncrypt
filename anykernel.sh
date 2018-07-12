@@ -38,13 +38,7 @@ ui_print "Unpacking boot image..."
 ui_print " "
 dump_boot;
 
-# Set magiskboot alias
-case $(file_getprop /system/build.prop ro.product.cpu.abi) in
-  x86*) alias magiskboot='$bin/x86/magiskboot';;
-  *) alias magiskboot='$bin/arm/magiskboot';;
-esac
-
-# Detect dtbo and move to proper place for ak2
+# Detect dtbo and move to proper place for modification for ak2
 dtboimage=`find /dev/block -iname dtbo$slot | head -n 1` 2>/dev/null;
 [ -z $dtboimage ] || { dtboimage=`readlink -f $dtboimage`; cp -f $dtboimage /tmp/anykernel/dtbo.img; }
 
@@ -72,6 +66,7 @@ list="${list} $inits"
 
 fstabs="$(echo $fstabs | sed -r "s|^ (.*)|\1|")"
 list="$(echo $list | sed -r -e "s|^ (.*)|\1|" -e "s| ./| |g")"
+[ "$slot" ] && slot_device_overlay
 
 found_fstab=false
 printed=false
@@ -122,7 +117,7 @@ if [ -f $overlay\kernel ]; then
 fi
 
 # remove dm_verity from dtb and dtbo
-for dtbs in $overlay\dtb /tmp/anykernel/dtbo /tmp/anykernel/dtbo.img $(ls *-dtb); do
+for dtbs in $overlay\dtb /tmp/anykernel/dtbo /tmp/anykernel/dtbo.img $(ls *-dtb 2>/dev/null); do
   [ -f $dtbs ] || continue
   ui_print "Removing dm-verity from $(basename $dtbs)..."
   magiskboot --dtb-patch $dtbs

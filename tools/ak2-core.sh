@@ -96,24 +96,24 @@ find_boot() {
 }
 # Slot device support
 slot_device() {
-  if [ ! -z $SLOT ]; then           
-    if [ -d $ramdisk/.subackup -o -d $ramdisk/.backup ]; then
-      patch_cmdline "skip_override" "skip_override";
-    else
-      patch_cmdline "skip_override" "";
-    fi
-    # Overlay stuff
-    if [ -d $ramdisk/.backup ]; then
-      overlay=$ramdisk/overlay/;
-    elif [ -d $ramdisk/.subackup ]; then
-      overlay=$ramdisk/boot/;
-    fi
-    for rdfile in $list; do
-      rddir=$(dirname $rdfile);
-      mkdir -p $overlay$rddir;
-      test ! -f $overlay$rdfile && cp -rp /system/$rdfile $overlay$rddir/;
-    done
+  if [ -d $ramdisk/.subackup -o -d $ramdisk/.backup ]; then
+    patch_cmdline "skip_override" "skip_override";
+  else
+    patch_cmdline "skip_override" "";
   fi
+  # Overlay stuff
+  if [ -d $ramdisk/.backup ]; then
+    overlay=$ramdisk/overlay/;
+  elif [ -d $ramdisk/.subackup ]; then
+    overlay=$ramdisk/boot/;
+  fi
+}
+slot_device_overlay() {
+  for rdfile in $list; do
+    rddir=$(dirname $rdfile);
+    mkdir -p $overlay$rddir;
+    test ! -f $overlay$rdfile && cp -rp /system/$rdfile $overlay$rddir/;
+  done
 }
 # dump boot and extract ramdisk
 split_boot() {
@@ -208,7 +208,7 @@ unpack_ramdisk() {
 }
 dump_boot() {
   find_boot;
-  slot_device;
+  [ "$slot" ] && slot_device;
   split_boot;
   unpack_ramdisk;
 }

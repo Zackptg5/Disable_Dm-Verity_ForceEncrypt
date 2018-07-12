@@ -43,15 +43,6 @@ abort() {
   exit 1;
 }
 
-grep_prop() {
-  local REGEX="s/^$1=//p"
-  shift
-  local FILES=$@
-  [ -z "$FILES" ] && FILES='/system/build.prop'
-  sed -n "$REGEX" $FILES 2>/dev/null | head -n 1
-}
-
-# show_progress 1.34 4;
 ui_print " ";
 cleanup;
 mkdir -p /tmp/anykernel/bin;
@@ -60,6 +51,19 @@ unzip -o "$ZIPFILE";
 if [ $? != 0 -o -z "$(ls /tmp/anykernel/tools)" ]; then
   abort "Unzip failed. Aborting...";
 fi;
+
+umount /system 2>/dev/null;
+umount /vendor 2>/dev/null;
+mount -o rw -t auto /system;
+[ -L /system/vendor ] && mount -o rw -t auto /vendor 2>/dev/null;
+mount /data 2>/dev/null;
+test -f /system/system/build.prop && root=/system;
+case $(file_getprop /system/build.prop ro.product.cpu.abi) in
+  x86*) mv -f /tmp/anykernel/tools/x86/* /tmp/anykernel/tools/;;
+  arm*) mv -f /tmp/anykernel/tools/arm/* /tmp/anykernel/tools/;;
+  *) ui_print "CPU architecture of $(file_getprop /system/build.prop ro.product.cpu.abi) is not supported!"; abort "Aborting!";;
+esac
+
 bb=/tmp/anykernel/tools/busybox;
 chmod 755 $bb;
 $bb chmod -R 755 /tmp/anykernel/tools /tmp/anykernel/bin;
@@ -82,14 +86,6 @@ ui_print " ";
 ui_print "AnyKernel2 by osm0sis @ xda-developers";
 ui_print " ";
 ui_print " ";
-
-umount /system 2>/dev/null;
-umount /vendor 2>/dev/null;
-mount -o rw -t auto /system;
-[ -L /system/vendor ] && mount -o rw -t auto /vendor 2>/dev/null;
-mount /data 2>/dev/null;
-test -f /system/system/build.prop && root=/system;
-# Test for treble device with non-treble rom
 
 if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.devicecheck)" == 1 ]; then
   ui_print "Checking device...";
