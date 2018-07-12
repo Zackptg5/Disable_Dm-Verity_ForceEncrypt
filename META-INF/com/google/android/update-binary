@@ -43,6 +43,14 @@ abort() {
   exit 1;
 }
 
+grep_prop() {
+  local REGEX="s/^$1=//p"
+  shift
+  local FILES=$@
+  [ -z "$FILES" ] && FILES='/system/build.prop'
+  sed -n "$REGEX" $FILES 2>/dev/null | head -n 1
+}
+
 # show_progress 1.34 4;
 ui_print " ";
 cleanup;
@@ -81,6 +89,8 @@ mount -o rw -t auto /system;
 mount -o rw -t auto /vendor 2>/dev/null;
 mount /data 2>/dev/null;
 test -f /system/system/build.prop && root=/system;
+# Test for treble device with non-treble rom
+[ -L /system/vendor ] && [ "$(grep_prop ro.build.treble)" != "true" ] && [ ! "$(grep ro.vendor.build.fingerprint /vendor/build.prop)" ] && umount /vendor 2>/dev/null
 
 if [ "$(file_getprop /tmp/anykernel/anykernel.sh do.devicecheck)" == 1 ]; then
   ui_print "Checking device...";
