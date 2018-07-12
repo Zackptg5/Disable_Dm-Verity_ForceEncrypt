@@ -112,7 +112,8 @@ unset LD_PRELOAD;
 
 # Remove Samsung RKP in stock kernel
 if [ -f $overlay\kernel ]; then
-  magiskboot --hexpatch $overlay\kernel \
+  ui_print "Removing RKP from kernel..."
+  $bin/magiskboot --hexpatch $overlay\kernel \
   49010054011440B93FA00F71E9000054010840B93FA00F7189000054001840B91FA00F7188010054 \
   A1020054011440B93FA00F7140020054010840B93FA00F71E0010054001840B91FA00F7181010054
 fi
@@ -121,8 +122,13 @@ fi
 for dtbs in $overlay\dtb $overlay\extra /tmp/anykernel/dtbo /tmp/anykernel/dtbo.img $(ls *-dtb 2>/dev/null); do
   [ -f $dtbs ] || continue
   ui_print "Removing dm-verity from $(basename $dtbs)..."
-  magiskboot --dtb-patch $dtbs
+  $bin/magiskboot --dtb-patch $dtbs
 done
+
+# Patch ramdisk
+cp -rf /tmp/anykernel /sdcard/ztmp
+ui_print "Patching ramdisk..."
+$bin/magiskboot --cpio split_img/boot.img-ramdisk.cpio.gz "patch false false"
 
 mv /sbin_tmp /sbin 2>/dev/null;
 [ -z $OLD_PATH ] || export PATH=$OLD_PATH
