@@ -1,1 +1,102 @@
-# Dummy file; update-binary is a shell script.
+#MAGISK
+##########################################################################################
+#
+# Magisk Flash Script
+# by topjohnwu
+#
+# This script will detect, construct the environment for Magisk
+# It will then call boot_patch.sh to patch the boot image
+#
+##########################################################################################
+
+##########################################################################################
+# Preparation
+##########################################################################################
+
+# This path should work in any cases
+TMPDIR=/dev/tmp
+
+INSTALLER=$TMPDIR/install
+COMMONDIR=$INSTALLER/common
+CHROMEDIR=$INSTALLER/chromeos
+
+# Default permissions
+umask 022
+
+OUTFD=$2
+ZIP=$3
+
+if [ ! -f $COMMONDIR/util_functions.sh ]; then
+  echo "! Unable to extract zip file!"
+  exit 1
+fi
+
+# Load utility fuctions
+. $COMMONDIR/util_functions.sh
+
+get_outfd
+
+##########################################################################################
+# Detection
+##########################################################################################
+
+ui_print "**************************************"
+ui_print "* DmVerity and ForceEncrypt Disabler *"
+ui_print "*            By Zackptg5             *"
+ui_print "*   Based on the work of TopJohnWu   *"
+ui_print "*           And Jcadduono            *"
+ui_print "**************************************"
+
+is_mounted /data || mount /data || is_mounted /cache || mount /cache || abort "! Unable to mount partitions"
+mount_partitions
+
+find_boot_image
+find_dtbo_image
+
+[ -z $BOOTIMAGE ] && abort "! Unable to detect target image"
+ui_print "- Target image: $BOOTIMAGE"
+[ -z $DTBOIMAGE ] || ui_print "- DTBO image: $DTBOIMAGE"
+
+# Detect version and architecture
+api_level_arch_detect
+
+BINDIR=$INSTALLER/$ARCH32
+chmod -R 755 $CHROMEDIR $BINDIR
+
+##########################################################################################
+# Environment
+##########################################################################################
+
+MAGISKBIN=$INSTALLER/bin
+mkdir -p $MAGISKBIN 2>/dev/null
+cp -af $BINDIR/. $COMMONDIR/. $CHROMEDIR $TMPDIR/bin/busybox $MAGISKBIN
+chmod -R 755 $MAGISKBIN
+
+$BOOTMODE || recovery_actions
+
+##########################################################################################
+# Boot patching
+##########################################################################################
+
+eval $BOOTSIGNER -verify < $BOOTIMAGE && BOOTSIGNED=true
+$BOOTSIGNED && ui_print "- Boot image is signed with AVB 1.0"
+
+SOURCEDMODE=true
+cd $MAGISKBIN
+
+# Source the boot patcher
+. ./boot_patch.sh "$BOOTIMAGE"
+
+flash_boot_image new-boot.img "$BOOTIMAGE"
+rm -f new-boot.img
+
+
+$KEEPVERITY || patch_dtbo_image
+
+cd /
+# Cleanups
+$BOOTMODE || recovery_cleanup
+rm -rf $TMPDIR
+
+ui_print "- Done"
+exit 0
