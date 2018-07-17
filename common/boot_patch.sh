@@ -140,10 +140,8 @@ MAGISK_PATCHED=false
 ./magiskboot --cpio ramdisk.cpio test
 case $? in
   0 )  # Stock boot
-    ui_print "- Stock boot image detected"
     ;;
   1 )  # Magisk patched
-    ui_print "- Magisk patched image detected"
     HIGHCOMP=false
     ;;
   2 ) # High compression mode
