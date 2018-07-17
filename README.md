@@ -1,2 +1,2 @@
 # Disables Verity and Forceencrypt
-Based on previous work by topjohnwu and jcadduono
+Heavily based on previous work by topjohnwu and jcadduono

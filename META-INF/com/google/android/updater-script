@@ -42,9 +42,9 @@ get_outfd
 
 ui_print "**************************************"
 ui_print "* DmVerity and ForceEncrypt Disabler *"
-ui_print "*            By Zackptg5             *"
-ui_print "*   Based on the work of TopJohnWu   *"
-ui_print "*           And Jcadduono            *"
+ui_print "*            By: Zackptg5            *"
+ui_print "*   Heavily based on the work of:    *"
+ui_print "*      TopJohnWu and Jcadduono       *"
 ui_print "**************************************"
 
 is_mounted /data || mount /data || is_mounted /cache || mount /cache || abort "! Unable to mount partitions"
