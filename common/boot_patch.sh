@@ -75,19 +75,24 @@ done
 # Make supersu and magisk config files
 ##########################################################################################
 
-ui_print "- Creating/overwriting .magisk and .supersu files"
+ui_print "- Creating/modifying .magisk and .supersu files..."
+rm -f /.backup/.magisk /data/.magisk /cache/.magisk /system/.magisk 2>/dev/null
 echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /cache/.magisk
 if [ -f "/data/.supersu" ]; then
-  sed -i "/REMOVEENCRYPTABLE/d" /data/.supersu
-  if [ "$(grep KEEPFORCEENCRYPT /data/.supersu)" ]; then
+  if [ "$(grep 'KEEPFORCEENCRYPT=' /data/.supersu)" ]; then
     sed -i "s/KEEPFORCEENCRYPT=.*/KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT/" /data/.supersu
   else
-    echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT" >> /data/.supersu
+    echo "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT" >> /data/.supersu
   fi
-  if [ "$(grep KEEPVERITY /data/.supersu)" ]; then
+  if [ "$(grep 'KEEPVERITY=' /data/.supersu)" ]; then
     sed -i "s/KEEPVERITY=.*/KEEPVERITY=$KEEPVERITY/" /data/.supersu
   else
-    echo -e "KEEPVERITY=$KEEPVERITY" >> /data/.supersu
+    echo "KEEPVERITY=$KEEPVERITY" >> /data/.supersu
+  fi
+  if [ "$(grep 'REMOVEENCRYPTABLE=' /data/.supersu)" ]; then
+    sed -i "s/REMOVEENCRYPTABLE=.*/REMOVEENCRYPTABLE=false/" /data/.supersu
+  else
+    echo "REMOVEENCRYPTABLE=false" >> /data/.supersu
   fi
 else
   echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /data/.supersu
