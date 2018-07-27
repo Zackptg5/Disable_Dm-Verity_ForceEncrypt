@@ -72,6 +72,28 @@ for hw in taimen walleye; do
 done
 
 ##########################################################################################
+# Make supersu and magisk config files
+##########################################################################################
+
+ui_print "- Creating/overwriting .magisk and .supersu files"
+echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /cache/.magisk
+if [ -f "/data/.supersu" ]; then
+  sed -i "/REMOVEENCRYPTABLE/d" /data/.supersu
+  if [ "$(grep KEEPFORCEENCRYPT /data/.supersu)" ]; then
+    sed -i "s/KEEPFORCEENCRYPT=.*/KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT/" /data/.supersu
+  else
+    echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT" >> /data/.supersu
+  fi
+  if [ "$(grep KEEPVERITY /data/.supersu)" ]; then
+    sed -i "s/KEEPVERITY=.*/KEEPVERITY=$KEEPVERITY/" /data/.supersu
+  else
+    echo -e "KEEPVERITY=$KEEPVERITY" >> /data/.supersu
+  fi
+else
+  echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /data/.supersu
+fi
+
+##########################################################################################
 # Unpack
 ##########################################################################################
 
