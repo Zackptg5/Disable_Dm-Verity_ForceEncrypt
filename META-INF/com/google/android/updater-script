@@ -18,6 +18,7 @@ TMPDIR=/dev/tmp
 
 INSTALLER=$TMPDIR/install
 COMMONDIR=$INSTALLER/common
+APK=$COMMONDIR/magisk.apk
 CHROMEDIR=$INSTALLER/chromeos
 
 # Default permissions
