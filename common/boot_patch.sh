@@ -193,6 +193,7 @@ ui_print "- Patching ramdisk"
 ./magiskboot --cpio ramdisk.cpio "patch $KEEPVERITY $KEEPFORCEENCRYPT"
 
 mkdir ftmp
+printed=false
 for i in $(cpio -t -F ramdisk.cpio | grep "fstab."); do
   if ! $printed; then
     $KEEPVERITY && ui_print "- Disabling fec in kernel fstabs..." || ui_print "- Disabling dm_verity & fec in kernel fstabs..."
