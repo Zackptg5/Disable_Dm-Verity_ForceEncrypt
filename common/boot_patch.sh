@@ -135,7 +135,10 @@ if [ $(grep_prop ro.build.version.sdk) -ge 26 ]; then
   printed=false
   for i in /system/vendor/etc/fstab*; do
     [ -f "$i" ] || continue
-    $printed || { ui_print "- Disabling dm_verity & forced encryption in fstabs..."; printed=true; }
+    if ! $printed; then
+      $KEEPVERITY && ui_print "- Disabling fec in vendor fstabs..." || ui_print "- Disabling dm_verity & fec in vendor fstabs..."
+      printed=true
+    fi
     ui_print "  Patching: $i"
     sed -i "
       s/forceencrypt=/encryptable=/g
@@ -188,6 +191,31 @@ fi
 ui_print "- Patching ramdisk"
 
 ./magiskboot --cpio ramdisk.cpio "patch $KEEPVERITY $KEEPFORCEENCRYPT"
+
+mkdir ftmp
+for i in $(cpio -t -F ramdisk.cpio | grep "fstab."); do
+  if ! $printed; then
+    $KEEPVERITY && ui_print "- Disabling fec in kernel fstabs..." || ui_print "- Disabling dm_verity & fec in kernel fstabs..."
+    printed=true
+  fi
+  ui_print "   Patching $i"
+  ./magiskboot --cpio ramdisk.cpio "extract $i ftmp/$i"
+  sed -i "
+    s/forceencrypt=/encryptable=/g
+    s/forcefdeorfbe=/encryptable=/g
+    s/fileencryption=/encryptable=/g
+  " "ftmp/$i"
+  $KEEPVERITY || sed -i "
+    s/,verify//g
+    s/verify,//g
+    s/verify\b//g
+    s/,support_scfs//g
+    s/support_scfs,//g
+    s/support_scfs\b//g
+  " "ftmp/$i"
+  ./magiskboot --cpio ramdisk.cpio "add 0644 $i ftmp/$i"
+done
+rm -rf ftmp
 
 ##########################################################################################
 # Binary patches
