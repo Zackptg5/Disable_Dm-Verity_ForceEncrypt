@@ -136,7 +136,7 @@ if [ $(grep_prop ro.build.version.sdk) -ge 26 ]; then
   for i in /system/vendor/etc/fstab*; do
     [ -f "$i" ] || continue
     if ! $printed; then
-      $KEEPVERITY && ui_print "- Disabling fec in vendor fstabs..." || ui_print "- Disabling dm_verity & fec in vendor fstabs..."
+      $KEEPVERITY && ui_print "- Disabling fe in vendor fstabs..." || ui_print "- Disabling dm_verity & fe in vendor fstabs..."
       printed=true
     fi
     ui_print "  Patching: $i"
@@ -199,7 +199,7 @@ mkdir ftmp
 printed=false
 for i in $(cpio -t -F ramdisk.cpio | grep "fstab."); do
   if ! $printed; then
-    $KEEPVERITY && ui_print "- Disabling fec in kernel fstabs..." || ui_print "- Disabling dm_verity & fec in kernel fstabs..."
+    $KEEPVERITY && ui_print "- Disabling fe in kernel fstabs..." || ui_print "- Disabling dm_verity & fe in kernel fstabs..."
     printed=true
   fi
   ui_print "   Patching $i"
