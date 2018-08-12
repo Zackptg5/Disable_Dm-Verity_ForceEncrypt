@@ -149,6 +149,9 @@ if [ $(grep_prop ro.build.version.sdk) -ge 26 ]; then
       s/,verify//g
       s/verify,//g
       s/verify\b//g
+      s/,avb//g
+      s/avb,//g
+      s/avb\b//g
       s/,support_scfs//g
       s/support_scfs,//g
       s/support_scfs\b//g
@@ -210,6 +213,9 @@ for i in $(cpio -t -F ramdisk.cpio | grep "fstab."); do
     s/,verify//g
     s/verify,//g
     s/verify\b//g
+    s/,avb//g
+    s/avb,//g
+    s/avb\b//g
     s/,support_scfs//g
     s/support_scfs,//g
     s/support_scfs\b//g
