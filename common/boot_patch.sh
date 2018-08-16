@@ -71,6 +71,9 @@ for hw in taimen walleye; do
   fi
 done
 
+# Extract magisk if doesn't exist
+[ -e magisk ] || ./magiskinit -x magisk $MAGISKBIN/magisk
+
 ##########################################################################################
 # Make supersu and magisk config files
 ##########################################################################################
