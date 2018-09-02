@@ -214,11 +214,6 @@ if [ -f kernel ]; then
   ./magiskboot --hexpatch kernel \
   603A46B91F0400710030005460C642F9 \
   603A46B91F00006B0030005460C642F9
-
-  # skip_initramfs -> want_initramfs
-  ./magiskboot --hexpatch kernel \
-  736B69705F696E697472616D6673 \
-  77616E745F696E697472616D6673
 fi
 
 ##########################################################################################
