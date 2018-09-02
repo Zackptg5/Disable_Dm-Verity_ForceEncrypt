@@ -13,10 +13,6 @@
 # Preparation
 ##########################################################################################
 
-# This path should work in any cases
-TMPDIR=/dev/tmp
-
-INSTALLER=$TMPDIR/install
 COMMONDIR=$INSTALLER/common
 APK=$COMMONDIR/magisk.apk
 CHROMEDIR=$INSTALLER/chromeos
@@ -35,7 +31,7 @@ fi
 # Load utility fuctions
 . $COMMONDIR/util_functions.sh
 
-get_outfd
+setup_flashable
 
 ##########################################################################################
 # Detection
@@ -88,7 +84,8 @@ cd $MAGISKBIN
 # Source the boot patcher
 . ./boot_patch.sh "$BOOTIMAGE"
 
-flash_boot_image new-boot.img "$BOOTIMAGE"
+ui_print "- Flashing new boot image"
+flash_image new-boot.img "$BOOTIMAGE" || abort "! Insufficient partition size"
 rm -f new-boot.img
 
 
