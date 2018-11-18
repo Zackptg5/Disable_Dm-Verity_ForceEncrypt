@@ -7,8 +7,9 @@
 #
 ##########################################################################################
 
-BOOTMODE=false
-BOOTSIGNER="/system/bin/dalvikvm -Xnodex2oat -Xnoimage-dex2oat -cp \$APK com.topjohnwu.magisk.utils.BootSigner"
+# Bootsigner related stuff
+BOOTSIGNERCLASS=a.a
+BOOTSIGNER="/system/bin/dalvikvm -Xnodex2oat -Xnoimage-dex2oat -cp \$APK \$BOOTSIGNERCLASS"
 BOOTSIGNED=false
 
 setup_flashable() {
@@ -80,14 +81,13 @@ mount_partitions() {
     mount -t ext4 -o rw $SYSTEMBLOCK /system
   fi
   [ -f /system/build.prop ] || is_mounted /system || abort "! Cannot mount /system"
-  cat /proc/mounts | grep -E '/dev/root|/system_root' >/dev/null && SYSTEM_ROOT=true || SYSTEM_ROOT=false
+  grep -qE '/dev/root|/system_root' /proc/mounts && SYSTEM_ROOT=true || SYSTEM_ROOT=false
   if [ -f /system/init ]; then
     SYSTEM_ROOT=true
     mkdir /system_root 2>/dev/null
     mount --move /system /system_root
     mount -o bind /system_root/system /system
   fi
-  $SYSTEM_ROOT && ui_print "- Device using system_root_image"
   if [ -L /system/vendor ]; then
     # Seperate /vendor partition
     is_mounted /vendor || mount -o rw /vendor 2>/dev/null
