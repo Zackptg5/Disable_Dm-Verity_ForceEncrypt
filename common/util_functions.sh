@@ -7,6 +7,7 @@
 #
 ##########################################################################################
 
+BOOTMODE=false
 # Bootsigner related stuff
 BOOTSIGNERCLASS=a.a
 BOOTSIGNER="/system/bin/dalvikvm -Xnodex2oat -Xnoimage-dex2oat -cp \$APK \$BOOTSIGNERCLASS"
