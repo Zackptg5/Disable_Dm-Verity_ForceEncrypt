@@ -45,6 +45,20 @@ getdir() {
 # Initialization
 ##########################################################################################
 
+# Flags
+KEEPFORCEENCRYPT=true; KEEPVERITY=true; KEEPQUOTA=true
+OIFS=$IFS; IFS=\|;
+ZIP="$(echo $(basename $ZIP) | tr '[:upper:]' '[:lower:]')"
+while true; do
+  case $ZIP in
+    *fec*|*forceencrypt*) KEEPFORCEENCRYPT=false; ZIP=$(echo $ZIP | sed -r "s/(fec|forceencrypt)//g");;
+    *verity*) KEEPVERITY=false; ZIP=$(echo $ZIP | sed "s/verity//g");;
+    *quota*) KEEPQUOTA=false; ZIP=$(echo $ZIP | sed "s/quota//g");;
+    *) break;;
+  esac
+done
+IFS=$OIFS
+
 if [ -z $SOURCEDMODE ]; then
   # Switch to the location of the script file
   cd "`getdir "${BASH_SOURCE:-$0}"`"
@@ -54,10 +68,6 @@ fi
 
 BOOTIMAGE="$1"
 [ -e "$BOOTIMAGE" ] || abort "$BOOTIMAGE does not exist!"
-
-# Flags
-KEEPVERITY=false
-KEEPFORCEENCRYPT=false
 
 chmod -R 755 .
 
@@ -126,11 +136,11 @@ if [ $(grep_prop ro.build.version.sdk) -ge 26 ]; then
   for i in /system/vendor/etc/fstab*; do
     [ -f "$i" ] || continue
     if ! $printed; then
-      $KEEPVERITY && ui_print "- Disabling fe in vendor fstabs..." || ui_print "- Disabling dm_verity & fe in vendor fstabs..."
+      ui_print "- Disabling selections in vendor fstabs..."
       printed=true
     fi
     ui_print "  Patching: $i"
-    sed -i "
+    $KEEPFORCEENCRYPT || sed -i "
       s/forceencrypt=/encryptable=/g
       s/forcefdeorfbe=/encryptable=/g
       s/fileencryption=/encryptable=/g
@@ -145,6 +155,11 @@ if [ $(grep_prop ro.build.version.sdk) -ge 26 ]; then
       s/,support_scfs//g
       s/support_scfs,//g
       s/support_scfs\b//g
+    " "$i"
+    $KEEPQUOTA || sed -i "
+      s/,quota//g
+      s/quota,//g
+      s/quota\b//g
     " "$i"
   done
 else
@@ -165,12 +180,12 @@ mkdir ftmp
 printed=false
 for i in $(cpio -t -F ramdisk.cpio | grep "fstab.\|.fstab"); do
   if ! $printed; then
-    $KEEPVERITY && ui_print "- Disabling fe in kernel fstabs..." || ui_print "- Disabling dm_verity & fe in kernel fstabs..."
+    ui_print "- Disabling selections in kernel fstabs..."
     printed=true
   fi
   ui_print "   Patching $i"
   ./magiskboot --cpio ramdisk.cpio "extract $i ftmp/$i"
-  sed -i "
+  $KEEPFORCEENCRYPT || sed -i "
     s/forceencrypt=/encryptable=/g
     s/forcefdeorfbe=/encryptable=/g
     s/fileencryption=/encryptable=/g
@@ -185,6 +200,11 @@ for i in $(cpio -t -F ramdisk.cpio | grep "fstab.\|.fstab"); do
     s/,support_scfs//g
     s/support_scfs,//g
     s/support_scfs\b//g
+  " "ftmp/$i"
+  $KEEPQUOTA || sed -i "
+    s/,quota//g
+    s/quota,//g
+    s/quota\b//g
   " "ftmp/$i"
   ./magiskboot --cpio ramdisk.cpio "add 0644 $i ftmp/$i"
 done
