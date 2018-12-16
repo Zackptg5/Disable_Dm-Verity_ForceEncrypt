@@ -92,6 +92,7 @@ mount_partitions() {
   fi
   if [ -L /system/vendor ]; then
     # Seperate /vendor partition
+    is_mounted /vendor && umount /vendor 2>/dev/null
     is_mounted /vendor || mount -o rw /vendor 2>/dev/null
     if ! is_mounted /vendor; then
       VENDORBLOCK=`find_block vendor$SLOT`
