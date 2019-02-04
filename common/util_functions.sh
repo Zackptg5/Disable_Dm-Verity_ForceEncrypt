@@ -57,8 +57,8 @@ find_block() {
   for uevent in /sys/dev/block/*/uevent; do
     local DEVNAME=`grep_prop DEVNAME $uevent`
     local PARTNAME=`grep_prop PARTNAME $uevent`
-    for p in "$@"; do
-      if [ "`toupper $p`" = "`toupper $PARTNAME`" ]; then
+    for BLOCK in "$@"; do
+      if [ "`toupper $BLOCK`" = "`toupper $PARTNAME`" ]; then
         echo /dev/block/$DEVNAME
         return 0
       fi
@@ -118,9 +118,9 @@ grep_prop() {
 find_boot_image() {
   BOOTIMAGE=
   if [ ! -z $SLOT ]; then
-    BOOTIMAGE=`find_block boot$SLOT ramdisk$SLOT`
+    BOOTIMAGE=`find_block ramdisk$SLOT recovery_ramdisk$SLOT boot$SLOT`
   else
-    BOOTIMAGE=`find_block boot ramdisk boot_a kern-a android_boot kernel lnx bootimg`
+    BOOTIMAGE=`find_block ramdisk recovery_ramdisk boot boot_a kern-a android_boot kernel lnx bootimg`
   fi
   if [ -z $BOOTIMAGE ]; then
     # Lets see what fstabs tells me
@@ -183,7 +183,7 @@ sign_chromeos() {
 }
 
 is_mounted() {
-  cat /proc/mounts | grep -q " `readlink -f $1` " 2>/dev/null
+  grep -q " `readlink -f $1` " /proc/mounts 2>/dev/null
   return $?
 }
 
