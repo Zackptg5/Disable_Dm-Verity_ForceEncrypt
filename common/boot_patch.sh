@@ -171,7 +171,7 @@ MAGISK_PATCHED=false
 
 mkdir ftmp
 printed=false
-for i in $(cpio -t -F ramdisk.cpio | grep "fstab.\|.fstab"); do
+for i in $(cpio -t -F ramdisk.cpio | grep -e "fstab." -e ".fstab"); do
   if ! $printed; then
     ui_print "- Disabling selections in kernel fstabs..."
     printed=true
