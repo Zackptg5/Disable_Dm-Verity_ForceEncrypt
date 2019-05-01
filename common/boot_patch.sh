@@ -138,10 +138,7 @@ FSTABS="/system/vendor/etc/fstab*"
 for i in odm nvdata; do
   j=$(find /dev/block -iname $i | head -n 1)
   if [ ! -z $j ]; then
-    ui_print "- Mounting /$i partition..."
-    mkdir /$i
-    if is_mounted /$i; then mount -o remount,rw /$i; else mount -o rw $j /$i; fi
-    is_mounted /$i || abort "! Cannot mount /$i"
+    mount_part $i
     [ "$i" == "nvdata" ] && FSTABS="$FSTABS /$i/fstab*" || FSTABS="$FSTABS /$i/etc/fstab*"
   fi
 done
@@ -262,7 +259,7 @@ fi
 ##########################################################################################
 
 for i in odm nvdata; do
-  [ "$(find /dev/block -iname $i | head -n 1)" ] && { ui_print "- Unmounting /$i..."; umount -l /$i 2>/dev/null; rm -rf /$i; }
+  [ "$(find /dev/block -iname $i | head -n 1)" ] && { ui_print "- Unmounting $i"; umount -l /$i 2>/dev/null; rm -rf /$i; }
 done
 
 ui_print "- Repacking boot image"
