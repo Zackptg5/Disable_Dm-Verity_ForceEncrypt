@@ -108,7 +108,7 @@ fi
 CHROMEOS=false
 
 ui_print "- Unpacking boot image"
-./magiskboot --unpack "$BOOTIMAGE"
+./magiskboot unpack "$BOOTIMAGE"
 
 case $? in
   1 )
@@ -120,16 +120,42 @@ case $? in
     ;;
 esac
 
+# Test patch status
+ui_print "- Checking ramdisk status"
+if [ -e ramdisk.cpio ]; then
+  ./magiskboot cpio ramdisk.cpio test
+  STATUS=$?
+else
+  # Stock A only system-as-root
+  STATUS=0
+fi
+
+##########################################################################################
+# Odm and nvdata partition check
+##########################################################################################
+
+FSTABS="/system/vendor/etc/fstab*"
+for i in odm nvdata; do
+  j=$(find /dev/block -iname $i | head -n 1)
+  if [ ! -z $j ]; then
+    ui_print "- Mounting /$i partition..."
+    mkdir /$i
+    if is_mounted /$i; then mount -o remount,rw /$i; else mount -o rw $j /$i; fi
+    is_mounted /$i || abort "! Cannot mount /$i"
+    [ "$i" == "nvdata" ] && FSTABS="$FSTABS /$i/fstab*" || FSTABS="$FSTABS /$i/etc/fstab*"
+  fi
+done
+
 ##########################################################################################
 # Fstab patches
 ##########################################################################################
 
 if [ $(grep_prop ro.build.version.sdk) -ge 26 ]; then
   printed=false
-  for i in /system/vendor/etc/fstab*; do
+  for i in $FSTABS; do
     [ -f "$i" ] || continue
     if ! $printed; then
-      ui_print "- Disabling selections in vendor fstabs..."
+      ui_print "- Disabling selections in fstabs..."
       printed=true
     fi
     ui_print "  Patching: $i"
@@ -167,9 +193,8 @@ fi
 
 ui_print "- Patching ramdisk"
 MAGISK_PATCHED=false
-./magiskboot --cpio ramdisk.cpio "patch $KEEPVERITY $KEEPFORCEENCRYPT"
+./magiskboot cpio ramdisk.cpio "patch $KEEPVERITY $KEEPFORCEENCRYPT"
 
-mkdir ftmp
 printed=false
 for i in $(cpio -t -F ramdisk.cpio | grep -e "fstab." -e ".fstab"); do
   if ! $printed; then
@@ -177,7 +202,8 @@ for i in $(cpio -t -F ramdisk.cpio | grep -e "fstab." -e ".fstab"); do
     printed=true
   fi
   ui_print "   Patching $i"
-  ./magiskboot --cpio ramdisk.cpio "extract $i ftmp/$i"
+  mkdir -p `dirname "ftmp/$i"`
+  ./magiskboot cpio ramdisk.cpio "extract $i ftmp/$i"
   $KEEPFORCEENCRYPT || sed -i "
     s/forceencrypt=/encryptable=/g
     s/forcefdeorfbe=/encryptable=/g
@@ -199,40 +225,53 @@ for i in $(cpio -t -F ramdisk.cpio | grep -e "fstab." -e ".fstab"); do
     s/quota,//g
     s/quota\b//g
   " "ftmp/$i"
-  ./magiskboot --cpio ramdisk.cpio "add 0644 $i ftmp/$i"
+  ./magiskboot cpio ramdisk.cpio "add 0644 $i ftmp/$i"
 done
 rm -rf ftmp
+
+if [ $((STATUS & 4)) -ne 0 ]; then
+  ui_print "- Compressing ramdisk"
+  ./magiskboot cpio ramdisk.cpio compress
+fi
+
 
 ##########################################################################################
 # Binary patches
 ##########################################################################################
 
 if ! $KEEPVERITY; then
-  [ -f dtb ] && ./magiskboot dtb-patch dtb && ui_print "- Removing dm(avb)-verity in dtb"
-  [ -f kernel_dtb ] && ./magiskboot dtb-patch kernel_dtb && ui_print "- Removing dm(avb)-verity in dtb"
-  [ -f extra ] && ./magiskboot dtb-patch extra && ui_print "- Removing dm(avb)-verity in extra-dtb"
+  for dt in dtb kernel_dtb extra recovery_dtbo; do
+    [ -f $dt ] && ./magiskboot dtb-patch $dt && ui_print "- Removing dm(avb)-verity in $dt"
+  done
 fi
 
 if [ -f kernel ]; then
   # Remove Samsung RKP
-  ./magiskboot --hexpatch kernel \
+  ./magiskboot hexpatch kernel \
   49010054011440B93FA00F71E9000054010840B93FA00F7189000054001840B91FA00F7188010054 \
   A1020054011440B93FA00F7140020054010840B93FA00F71E0010054001840B91FA00F7181010054
 
   # Remove Samsung defex
   # Before: [mov w2, #-221]   (-__NR_execve)
   # After:  [mov w2, #-32768]
-  ./magiskboot --hexpatch kernel 821B8012 E2FF8F12
+  ./magiskboot hexpatch kernel 821B8012 E2FF8F12
 fi
 
 ##########################################################################################
 # Repack and flash
 ##########################################################################################
 
+for i in odm nvdata; do
+  [ "$(find /dev/block -iname $i | head -n 1)" ] && { ui_print "- Unmounting /$i..."; umount -l /$i 2>/dev/null; rm -rf /$i; }
+done
+
 ui_print "- Repacking boot image"
-./magiskboot --repack "$BOOTIMAGE" || abort "! Unable to repack boot image!"
+./magiskboot repack "$BOOTIMAGE" || abort "! Unable to repack boot image!"
 
 # Sign chromeos boot
 $CHROMEOS && sign_chromeos
 
-./magiskboot --cleanup
+./magiskboot cleanup
+
+# Reset any error code
+true
