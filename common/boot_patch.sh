@@ -46,7 +46,7 @@ getdir() {
 ##########################################################################################
 
 # Flags
-KEEPFORCEENCRYPT=true; KEEPVERITY=true; KEEPQUOTA=true
+KEEPFORCEENCRYPT=true; KEEPVERITY=true; KEEPQUOTA=true; RECOVERYMODE=false
 OIFS=$IFS; IFS=\|;
 ZIP="$(echo $(basename $ZIP) | tr '[:upper:]' '[:lower:]')"
 while true; do
