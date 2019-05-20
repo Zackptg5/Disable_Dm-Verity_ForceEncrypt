@@ -9,8 +9,8 @@
 # Presets
 ##########
 
-MAGISK_VER="19.1"
-MAGISK_VER_CODE=19100
+MAGISK_VER="19.2"
+MAGISK_VER_CODE=19200
 
 # Detect whether in boot mode
 [ -z $BOOTMODE ] && BOOTMODE=false
@@ -173,10 +173,10 @@ mount_part() {
   mkdir $POINT 2>/dev/null
   is_mounted $POINT && return
   ui_print "- Mounting $PART"
-  mount -o rw $POINT 2>/dev/null
+  mount -o ro $POINT 2>/dev/null
   if ! is_mounted $POINT; then
     local BLOCK=`find_block $PART$SLOT`
-    mount -o rw $BLOCK $POINT
+    mount -o ro $BLOCK $POINT
   fi
   is_mounted $POINT || abort "! Cannot mount $POINT"
 }

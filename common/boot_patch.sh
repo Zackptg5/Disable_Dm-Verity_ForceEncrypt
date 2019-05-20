@@ -268,7 +268,5 @@ ui_print "- Repacking boot image"
 # Sign chromeos boot
 $CHROMEOS && sign_chromeos
 
-./magiskboot cleanup
-
 # Reset any error code
 true
