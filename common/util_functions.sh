@@ -173,10 +173,10 @@ mount_part() {
   mkdir $POINT 2>/dev/null
   is_mounted $POINT && return
   ui_print "- Mounting $PART"
-  mount -o ro $POINT 2>/dev/null
+  mount -o rw $POINT 2>/dev/null
   if ! is_mounted $POINT; then
     local BLOCK=`find_block $PART$SLOT`
-    mount -o ro $BLOCK $POINT
+    mount -o rw $BLOCK $POINT
   fi
   is_mounted $POINT || abort "! Cannot mount $POINT"
 }
