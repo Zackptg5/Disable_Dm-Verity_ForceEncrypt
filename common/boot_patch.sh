@@ -136,8 +136,7 @@ fi
 
 FSTABS="/system/vendor/etc/fstab*"
 for i in odm nvdata; do
-  j=$(find /dev/block -iname $i | head -n 1)
-  if [ ! -z $j ]; then
+  if [ "$(find /dev/block -iname $i | head -n 1)" ]; then
     mount_part $i
     [ "$i" == "nvdata" ] && FSTABS="$FSTABS /$i/fstab*" || FSTABS="$FSTABS /$i/etc/fstab*"
   fi
