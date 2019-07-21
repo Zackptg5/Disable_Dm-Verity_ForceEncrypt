@@ -49,8 +49,8 @@ ui_print " "
 
 # Make supersu and magisk config files
 ui_print "- Creating/modifying .magisk and .supersu files..."
-[ -d /cache ] && echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /cache/.magisk || echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /data/cache/.magisk
 rm -f /.backup/.magisk /data/.magisk /cache/.magisk /system/.magisk 2>/dev/null
+[ -d /cache ] && echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /cache/.magisk || echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /data/cache/.magisk
 if [ -f "/data/.supersu" ]; then
   if [ "$(grep 'KEEPFORCEENCRYPT=' /data/.supersu)" ]; then
     sed -i "s/KEEPFORCEENCRYPT=.*/KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT/" /data/.supersu
