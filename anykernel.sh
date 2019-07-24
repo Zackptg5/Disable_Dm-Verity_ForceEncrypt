@@ -15,6 +15,7 @@ device.name3=
 device.name4=
 device.name5=
 supported.versions=
+supported.patchlevels=
 '; } # end properties
 
 # shell variables
@@ -36,10 +37,6 @@ ramdisk_compression=auto;
 
 
 ## AnyKernel install
-ui_print "- Unpacking boot img..."
-split_boot;
-cd $split_img
-
 ui_print "- Detecting Root Method..."
 if [ -d $MAGISKBIN ]; then
   ROOT="Magisk"; ui_print "   MagiskSU detected!"
@@ -58,21 +55,42 @@ else
   fi
 fi
 
+ui_print "- Unpacking boot img..."
+split_boot;
+cd $split_img
 
-ui_print " "
-ui_print "- Chosen/Default Arguments:"
-ui_print "   Keep ForceEncrypt: $KEEPFORCEENCRYPT"
-ui_print "   Keep Dm-Verity: $KEEPVERITY"
-ui_print "   Keep Disc Quota: $KEEPQUOTA"
-ui_print " "
+$bin/busybox mount -o rw,remount -t auto /system;
+$bin/busybox mount -o rw,remount -t auto /vendor 2>/dev/null;
+[ -f /system_root/init.rc ] && SAROOT=true || SAROOT=false
 
 # Make supersu and magisk config files
 if [ "$ROOT" == "Magisk" ]; then
-  ui_print "- Creating/modifying .magisk file..."
+  if [ -e ramdisk.cpio ]; then
+    $bin/magiskboot cpio ramdisk.cpio "extract .backup/.magisk $home/config"
+  fi
+  if [ ! -f $home/config ]; then
+    for i in /data/.magisk /cache/.magisk /system/.magisk; do
+      [ -f $i ] && cp -f $i $home/config && break
+    done
+  fi
   rm -f /data/.magisk /cache/.magisk /system/.magisk 2>/dev/null
-  echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > $home/config
+  if [ -f $home/config ]; then
+    ui_print "- Modifying existing .magisk file..."
+    if [ "$(grep 'KEEPFORCEENCRYPT=' $home/config)" ]; then
+      sed -i "s/KEEPFORCEENCRYPT=.*/KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT/" $home/config
+    else
+      echo "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT" >> $home/config
+    fi
+    if [ "$(grep 'KEEPVERITY=' $home/config)" ]; then
+      sed -i "s/KEEPVERITY=.*/KEEPVERITY=$KEEPVERITY/" $home/config
+    else
+      echo "KEEPVERITY=$KEEPVERITY" >> $home/config
+    fi
+  else
+    ui_print "- Creating .magisk file..."
+    echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > $home/config
+  fi
 elif [ "$ROOT" == "SuperSU" ]; then
-  ui_print "- Creating/modifying .supersu file..."
   if [ -f "/data/.supersu" ]; then
     ui_print "- Modifying existing .supersu file..."
     if [ "$(grep 'KEEPFORCEENCRYPT=' /data/.supersu)" ]; then
@@ -96,10 +114,6 @@ elif [ "$ROOT" == "SuperSU" ]; then
   fi
 fi
 
-# Gather fstabs outside of ramdisk.cpio
-$bin/busybox mount -o rw,remount -t auto /system;
-$bin/busybox mount -o rw,remount -t auto /vendor 2>/dev/null;
-[ -f /system_root/init.rc ] && SAROOT=true || SAROOT=false
 $SAROOT && FSTABS="$(find /system_root -type f \( -name "fstab.*" -o -name "*.fstab" \) -not \( -path "./system*" -o -path "./vendor*" \) | sed "s|^./||")"
 FSTABS="$FSTABS /system/vendor/etc/fstab*"
 for i in odm nvdata; do
@@ -111,10 +125,11 @@ done
 
 # Fstab patches
 if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
+  [ -z $FSTABS ] || ui_print "- Patching fstabs:"
   for i in $FSTABS; do
     [ -f "$i" ] || continue
-    ui_print "  Patching: $i"
-    PERM="$(ls -z $i | awk '{print $1}')"
+    ui_print "  $i"
+    PERM="$($bin/toybox ls -Z $i | $bb awk '{print $1}')"
     $KEEPFORCEENCRYPT || sed -i "
       s/forceencrypt=/encryptable=/g
       s/forcefdeorfbe=/encryptable=/g
@@ -148,8 +163,14 @@ if [ -e ramdisk.cpio ]; then
   ui_print "- Patching ramdisk..."
   $bin/magiskboot cpio ramdisk.cpio "patch $KEEPVERITY $KEEPFORCEENCRYPT $KEEPQUOTA"
   [ "$ROOT" == "Magisk" ] && $bin/magiskboot cpio ramdisk.cpio "add 000 .backup/.magisk $home/config"
-else
-  $DATA && cp -f $home/config /data/.magisk || cp -f $home/config /cache/.magisk
+elif [ "$ROOT" == "Magisk" ]; then
+  if $DATA; then
+    cp -f $home/config /data/.magisk
+  elif [ -d /cache ]
+    cp -f $home/config /cache/.magisk
+  else
+    cp -f $home/config /system/.magisk
+  fi
 fi
 
 # Binary patches

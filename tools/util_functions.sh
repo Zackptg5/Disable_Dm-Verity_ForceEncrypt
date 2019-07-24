@@ -146,3 +146,10 @@ IFS=$OIFS
 
 check_data
 get_flags
+
+ui_print " "
+ui_print "- Chosen/Default Arguments:"
+ui_print "   Keep ForceEncrypt: $KEEPFORCEENCRYPT"
+ui_print "   Keep Dm-Verity: $KEEPVERITY"
+ui_print "   Keep Disc Quota: $KEEPQUOTA"
+ui_print " "
