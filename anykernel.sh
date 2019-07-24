@@ -114,6 +114,7 @@ if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
   for i in $FSTABS; do
     [ -f "$i" ] || continue
     ui_print "  Patching: $i"
+    PERM="$(ls -z $i | awk '{print $1}')"
     $KEEPFORCEENCRYPT || sed -i "
       s/forceencrypt=/encryptable=/g
       s/forcefdeorfbe=/encryptable=/g
@@ -135,7 +136,7 @@ if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
       s/quota,//g
       s/quota\b//g
     " "$i"
-    [ "$(dirname $i)" == "/nvdata" ] && chcon u:object_r:nvdata_file:s0 $i
+    chcon $PERM $i
   done
 else
   ui_print "- Disabling dm_verity in default.prop..."
@@ -147,6 +148,8 @@ if [ -e ramdisk.cpio ]; then
   ui_print "- Patching ramdisk..."
   $bin/magiskboot cpio ramdisk.cpio "patch $KEEPVERITY $KEEPFORCEENCRYPT $KEEPQUOTA"
   [ "$ROOT" == "Magisk" ] && $bin/magiskboot cpio ramdisk.cpio "add 000 .backup/.magisk $home/config"
+else
+  $DATA && cp -f $home/config /data/.magisk || cp -f $home/config /cache/.magisk
 fi
 
 # Binary patches
