@@ -40,6 +40,25 @@ ui_print "- Unpacking boot img..."
 split_boot;
 cd $split_img
 
+ui_print "- Detecting Root Method..."
+if [ -d $MAGISKBIN ]; then
+  ROOT="Magisk"; ui_print "   MagiskSU detected!"
+else
+  supersuimg_mount
+  if [ "$supersuimg" ] || [ -d /su ]; then
+    ROOT="SuperSU"; ui_print "   Systemless SuperSU detected!"
+  elif [ -e "$(find /data /cache -name supersu_is_here | head -n1)" ]; then
+    ROOT="SuperSU"; ui_print "   Systemless SuperSU detected!"
+  elif [ -d /system/su ] || [ -f /system/xbin/daemonsu ] || [ -f /system/xbin/sugote ]; then
+    ROOT="SuperSU"; ui_print "   System SuperSU detected!"
+  elif [ -f /system/xbin/su ]; then
+    [ "$(grep "SuperSU" /system/xbin/su)" ] && { ROOT="SuperSU"; ui_print "   System SuperSU detected!"; }
+  else
+    ui_print "   No Magisk or SuperSu detected!"
+  fi
+fi
+
+
 ui_print " "
 ui_print "- Chosen/Default Arguments:"
 ui_print "   Keep ForceEncrypt: $KEEPFORCEENCRYPT"
@@ -48,27 +67,33 @@ ui_print "   Keep Disc Quota: $KEEPQUOTA"
 ui_print " "
 
 # Make supersu and magisk config files
-ui_print "- Creating/modifying .magisk and .supersu files..."
-rm -f /.backup/.magisk /data/.magisk /cache/.magisk /system/.magisk 2>/dev/null
-[ -d /cache ] && echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /cache/.magisk || echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /data/cache/.magisk
-if [ -f "/data/.supersu" ]; then
-  if [ "$(grep 'KEEPFORCEENCRYPT=' /data/.supersu)" ]; then
-    sed -i "s/KEEPFORCEENCRYPT=.*/KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT/" /data/.supersu
+if [ "$ROOT" == "Magisk" ]; then
+  ui_print "- Creating/modifying .magisk file..."
+  rm -f /data/.magisk /cache/.magisk /system/.magisk 2>/dev/null
+  echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > $home/config
+elif [ "$ROOT" == "SuperSU" ]; then
+  ui_print "- Creating/modifying .supersu file..."
+  if [ -f "/data/.supersu" ]; then
+    ui_print "- Modifying existing .supersu file..."
+    if [ "$(grep 'KEEPFORCEENCRYPT=' /data/.supersu)" ]; then
+      sed -i "s/KEEPFORCEENCRYPT=.*/KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT/" /data/.supersu
+    else
+      echo "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT" >> /data/.supersu
+    fi
+    if [ "$(grep 'KEEPVERITY=' /data/.supersu)" ]; then
+      sed -i "s/KEEPVERITY=.*/KEEPVERITY=$KEEPVERITY/" /data/.supersu
+    else
+      echo "KEEPVERITY=$KEEPVERITY" >> /data/.supersu
+    fi
+    if [ "$(grep 'REMOVEENCRYPTABLE=' /data/.supersu)" ]; then
+      sed -i "s/REMOVEENCRYPTABLE=.*/REMOVEENCRYPTABLE=false/" /data/.supersu
+    else
+      echo "REMOVEENCRYPTABLE=false" >> /data/.supersu
+    fi
   else
-    echo "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT" >> /data/.supersu
+    ui_print "- Creating .supersu file..."
+    echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /data/.supersu
   fi
-  if [ "$(grep 'KEEPVERITY=' /data/.supersu)" ]; then
-    sed -i "s/KEEPVERITY=.*/KEEPVERITY=$KEEPVERITY/" /data/.supersu
-  else
-    echo "KEEPVERITY=$KEEPVERITY" >> /data/.supersu
-  fi
-  if [ "$(grep 'REMOVEENCRYPTABLE=' /data/.supersu)" ]; then
-    sed -i "s/REMOVEENCRYPTABLE=.*/REMOVEENCRYPTABLE=false/" /data/.supersu
-  else
-    echo "REMOVEENCRYPTABLE=false" >> /data/.supersu
-  fi
-else
-  echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /data/.supersu
 fi
 
 # Gather fstabs outside of ramdisk.cpio
@@ -110,14 +135,19 @@ if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
       s/quota,//g
       s/quota\b//g
     " "$i"
+    [ "$(dirname $i)" == "/nvdata" ] && chcon u:object_r:nvdata_file:s0 $i
   done
 else
   ui_print "- Disabling dm_verity in default.prop..."
   $SAROOT || $bin/magiskboot cpio ramdisk.cpio "extract default.prop default.prop"
   sed -i "s/ro.config.dmverity=.*/ro.config.dmverity=false/" default.prop
-  $SAROOT && rm -f verity_key || $bin/magiskboot cpio ramdisk.cpio "add 0644 default.prop default.prop"
+  $SAROOT && rm -f /system_root/verity_key || $bin/magiskboot cpio ramdisk.cpio "add 0644 default.prop default.prop"
 fi
-[ -e ramdisk.cpio ] && { ui_print "- Patching ramdisk..."; $bin/magiskboot cpio ramdisk.cpio "patch $KEEPVERITY $KEEPFORCEENCRYPT $KEEPQUOTA"; }
+if [ -e ramdisk.cpio ]; then
+  ui_print "- Patching ramdisk..."
+  $bin/magiskboot cpio ramdisk.cpio "patch $KEEPVERITY $KEEPFORCEENCRYPT $KEEPQUOTA"
+  [ "$ROOT" == "Magisk" ] && $bin/magiskboot cpio ramdisk.cpio "add 000 .backup/.magisk $home/config"
+fi
 
 # Binary patches
 if ! $KEEPVERITY; then

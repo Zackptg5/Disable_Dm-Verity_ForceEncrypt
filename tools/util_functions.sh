@@ -102,6 +102,29 @@ check_data() {
   if grep ' /data ' /proc/mounts | grep -vq 'tmpfs'; then
     # Test if data is writable
     touch /data/.rw && rm /data/.rw && DATA=true
+    # Test if DE storage is writable
+    $DATA && [ -d /data/adb ] && touch /data/adb/.rw && rm /data/adb/.rw && DATA_DE=true
+  fi
+  $DATA && NVBASE=/data || NVBASE=/cache/data_adb
+  $DATA_DE && NVBASE=/data/adb
+  MAGISKBIN=$NVBASE/magisk
+}
+
+supersuimg_mount() {
+  supersuimg=$(ls /cache/su.img /data/su.img 2>/dev/null)
+  if [ "$supersuimg" ]; then
+    if ! is_mounted /su; then
+      ui_print "- Mounting /su"
+      [ -d /su ] || mkdir /su 2>/dev/null
+      mount -t ext4 -o rw,noatime $supersuimg /su 2>/dev/null
+      for i in 0 1 2 3 4 5 6 7; do
+        is_mounted /su && break
+        local loop=/dev/block/loop$i
+        mknod $loop b 7 $i
+        losetup $loop $supersuimg
+        mount -t ext4 -o loop $loop /su 2>/dev/null
+      done
+    fi
   fi
 }
 
