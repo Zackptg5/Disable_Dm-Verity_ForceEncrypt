@@ -108,6 +108,10 @@ elif [ "$ROOT" == "SuperSU" ]; then
     ui_print "- Creating .supersu file..."
     echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /data/.supersu
   fi
+else
+  ui_print "- Creating .magisk and .supersu files..."
+  echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > $home/config
+  cp -f $home/config /data/.supersu
 fi
 
 $SAROOT && FSTABS="$(find /system_root -type f \( -name "fstab.*" -o -name "*.fstab" \) -not \( -path "./system*" -o -path "./vendor*" \) | sed "s|^./||")"
@@ -158,8 +162,8 @@ fi
 if [ -e ramdisk.cpio ]; then
   ui_print "- Patching ramdisk..."
   $bin/magiskboot cpio ramdisk.cpio "patch $KEEPVERITY $KEEPFORCEENCRYPT $KEEPQUOTA"
-  [ "$ROOT" == "Magisk" ] && $bin/magiskboot cpio ramdisk.cpio "add 000 .backup/.magisk $home/config"
-elif [ "$ROOT" == "Magisk" ]; then
+  [ "$ROOT" != "SuperSU" ] && $bin/magiskboot cpio ramdisk.cpio "mkdir 000 .backup" "add 000 .backup/.magisk $home/config"
+elif [ "$ROOT" != "SuperSU" ]; then
   if $DATA; then
     cp -f $home/config /data/.magisk
   elif [ -d /cache ]; then
