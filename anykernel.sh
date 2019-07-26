@@ -61,10 +61,9 @@ cd $split_img
 
 # Make supersu and magisk config files
 if [ "$ROOT" == "Magisk" ]; then
-  if [ -e ramdisk.cpio ]; then
+  if [ -e ramdisk.cpio ] && $bin/magiskboot cpio ramdisk.cpio "exists .backup/.magisk"; then
     $bin/magiskboot cpio ramdisk.cpio "extract .backup/.magisk $home/config"
-  fi
-  if [ ! -f $home/config ]; then
+  else
     for i in /data/.magisk /cache/.magisk /system/.magisk; do
       [ -f $i ] && cp -f $i $home/config && break
     done
