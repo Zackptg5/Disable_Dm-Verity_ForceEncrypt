@@ -26,8 +26,8 @@ ramdisk_compression=auto;
 
 ## AnyKernel methods (DO NOT CHANGE)
 # import patching functions/variables - see for reference
-. tools/util_functions.sh
 . tools/ak3-core.sh;
+. tools/util_functions.sh
 
 
 ## AnyKernel file attributes
@@ -58,10 +58,6 @@ fi
 ui_print "- Unpacking boot img..."
 split_boot;
 cd $split_img
-
-$bin/busybox mount -o rw,remount -t auto /system;
-$bin/busybox mount -o rw,remount -t auto /vendor 2>/dev/null;
-[ -f /system_root/init.rc ] && SAROOT=true || SAROOT=false
 
 # Make supersu and magisk config files
 if [ "$ROOT" == "Magisk" ]; then
@@ -128,8 +124,8 @@ if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
   [ -z $FSTABS ] || ui_print "- Patching fstabs:"
   for i in $FSTABS; do
     [ -f "$i" ] || continue
-    ui_print "  $i"
-    PERM="$($bin/toybox ls -Z $i | $bb awk '{print $1}')"
+    ui_print "   $i"
+    PERM="$(/system/bin/toybox ls -Z $i | $bb awk '{print $1}')"
     $KEEPFORCEENCRYPT || sed -i "
       s/forceencrypt=/encryptable=/g
       s/forcefdeorfbe=/encryptable=/g
@@ -166,7 +162,7 @@ if [ -e ramdisk.cpio ]; then
 elif [ "$ROOT" == "Magisk" ]; then
   if $DATA; then
     cp -f $home/config /data/.magisk
-  elif [ -d /cache ]
+  elif [ -d /cache ]; then
     cp -f $home/config /cache/.magisk
   else
     cp -f $home/config /system/.magisk

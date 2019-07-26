@@ -107,16 +107,19 @@ ui_print " " "AnyKernel3 by osm0sis @ xda-developers" " " " ";
 
 unmount_all;
 if ! is_mounted /system; then
-  $bb mount -o ro -t auto /system;
+  $bb mount -o rw -t auto /system;
 fi;
-($bb mount -o ro -t auto /vendor;
+($bb mount -o rw -t auto /vendor;
 $bb mount /data;
 $bb mount /cache;) 2>/dev/null;
 if [ -f /system/system/build.prop ]; then
+  SAROOT=true
   [ -L /system_root ] && rm -f /system_root
   mkdir /system_root
   $bb mount --move /system /system_root
   $bb mount -o bind /system_root/system /system
+else
+  SAROOT=false
 fi;
 savedpath="$LD_LIBRARY_PATH";
 savedpre="$LD_PRELOAD";
@@ -202,7 +205,7 @@ fi;
 ui_print "Installing...";
 core=$($bb grep -oE 'ak.*core.sh' anykernel.sh);
 test -f tools/$core || $bb ln -s $home/tools/ak*-core.sh $home/tools/$core;
-PATH="$home/bin:$PATH" home=$home ZIPFILE=$ZIPFILE $bb ash anykernel.sh $2;
+PATH="$home/bin:$PATH" home=$home ZIPFILE=$ZIPFILE SAROOT=$SAROOT $bb ash anykernel.sh $2;
 if [ $? != 0 ]; then
   abort;
 fi;
