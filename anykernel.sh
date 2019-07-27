@@ -162,13 +162,12 @@ if [ -e ramdisk.cpio ]; then
   ui_print "- Patching ramdisk..."
   $bin/magiskboot cpio ramdisk.cpio "patch $KEEPVERITY $KEEPFORCEENCRYPT $KEEPQUOTA"
   [ "$ROOT" != "SuperSU" ] && $bin/magiskboot cpio ramdisk.cpio "mkdir 000 .backup" "add 000 .backup/.magisk $home/config"
-elif [ "$ROOT" != "SuperSU" ]; then
+fi
+if [ "$ROOT" != "SuperSU" ]; then
   if $DATA; then
     cp -f $home/config /data/.magisk
-  elif [ -d /cache ]; then
-    cp -f $home/config /cache/.magisk
   else
-    cp -f $home/config /system/.magisk
+    cp -f $home/config /cache/.magisk
   fi
 fi
 
