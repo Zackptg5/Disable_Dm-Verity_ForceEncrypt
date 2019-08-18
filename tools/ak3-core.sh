@@ -22,7 +22,7 @@ ui_print() {
 
 # abort ["<text>" [...]]
 abort() {
-  ui_print " " "$*";
+  ui_print " " "$@";
   exit 1;
 }
 
@@ -607,7 +607,7 @@ reset_ak() {
     done;
   fi;
   test -d $split_img && rm -rf $ramdisk;
-  rm -rf $bootimg $ramdisk $split_img $home/*-new* $home/*-files/current;
+  rm -rf $bootimg $split_img $home/*-new* $home/*-files/current;
 
   if [ "$1" == "keep" ]; then
     test -d $home/rdtmp && mv -f $home/rdtmp $ramdisk;
@@ -678,7 +678,9 @@ setup_ak() {
             else
               abort "Unable to determine mtd $block partition. Aborting...";
             fi;
-            target=/dev/mtd/$mtdname;
+            if [ -e /dev/mtd/$mtdname ]; then
+              target=/dev/mtd/$mtdname;
+            fi;
           elif [ -e /dev/block/by-name/$part ]; then
             target=/dev/block/by-name/$part;
           elif [ -e /dev/block/bootdevice/by-name/$part ]; then
@@ -690,7 +692,7 @@ setup_ak() {
           elif [ -e /dev/$part ]; then
             target=/dev/$part;
           fi;
-          test -e "$target" && break 2;
+          test "$target" && break 2;
         done;
       done;
       if [ "$target" ]; then

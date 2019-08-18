@@ -113,7 +113,7 @@ else
   cp -f $home/config /data/.supersu
 fi
 
-$SAROOT && FSTABS="$(find /system_root -type f \( -name "fstab.*" -o -name "*.fstab" \) -not \( -path "./system*" -o -path "./vendor*" \) | sed "s|^./||")"
+[ -d /system_root ] && FSTABS="$(find /system_root -type f \( -name "fstab.*" -o -name "*.fstab" \) -not \( -path "./system*" -o -path "./vendor*" \) | sed "s|^./||")"
 FSTABS="$FSTABS /system/vendor/etc/fstab*"
 for i in odm nvdata; do
   if [ "$(find /dev/block -iname $i | head -n 1)" ]; then
@@ -154,9 +154,10 @@ if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
   done
 else
   ui_print "- Disabling dm_verity in default.prop..."
-  $SAROOT || $bin/magiskboot cpio ramdisk.cpio "extract default.prop default.prop"
+  $bin/magiskboot cpio ramdisk.cpio "extract default.prop default.prop"
   sed -i "s/ro.config.dmverity=.*/ro.config.dmverity=false/" default.prop
-  $SAROOT && rm -f /system_root/verity_key || $bin/magiskboot cpio ramdisk.cpio "add 0644 default.prop default.prop"
+  $bin/magiskboot cpio ramdisk.cpio "add 0644 default.prop default.prop"
+  $bin/magiskboot cpio ramdisk.cpio "rm verity_key"
 fi
 if [ -e ramdisk.cpio ]; then
   ui_print "- Patching ramdisk..."

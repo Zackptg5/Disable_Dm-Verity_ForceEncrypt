@@ -10,6 +10,7 @@ $BOOTMODE || ps -A 2>/dev/null | grep zygote | grep -v grep >/dev/null && BOOTMO
 
 $BOOTMODE && DIR=/sdcard || DIR=$(dirname "$ZIPFILE");
 
+test "$ANDROID_ROOT" || ANDROID_ROOT=/system;
 test "$home" || home=/tmp/anykernel;
 
 ui_print() {
@@ -18,10 +19,15 @@ ui_print() {
     shift;
   done;
 }
+ui_printfile() {
+  while IFS='' read -r line || $bb [[ -n "$line" ]]; do
+    ui_print "$line";
+  done < $1;
+}
 show_progress() { echo "progress $1 $2" > $OUTFD; }
 file_getprop() { $bb grep "^$2=" "$1" | $bb cut -d= -f2-; }
 int2ver() {
-  if [ "$1" -eq "$1" ] 2>/dev/null; then 
+  if [ "$1" -eq "$1" ] 2>/dev/null; then
     echo "$1.0.0";
   elif [ ! "$(echo "$1" | $bb cut -d. -f3)" ]; then
     echo "$1.0";
@@ -42,22 +48,42 @@ debugging() {
     ;;
   esac;
 }
-is_mounted() { $bb mount | $bb grep -q " $1 "; }
-unmount_all() {
-  ($bb umount /system;
-  if [ -d /system_root -a ! -f /system/build.prop ]; then
-    $bb umount /system_root;
+setup_mountpoint() {
+  test -L $1 && $bb mv -f $1 ${1}_link;
+  if [ ! -d $1 ]; then
+    rm -f $1;
+    mkdir $1;
   fi;
-  $bb umount /system;
-  umount /vendor;) 2>/dev/null;
+}
+is_mounted() { $bb mount | $bb grep -q " $1 "; }
+umount_all() {
+  ($bb umount /system;
+  $bb umount -l /system;
+  if [ -e /system_root ]; then
+    $bb umount /system_root;
+    $bb umount -l /system_root;
+  fi;
+  umount /vendor;
+  umount -l /vendor;
+  if [ "$umount_data" ]; then
+    $bb umount /data;
+    $bb umount -l /data;
+  fi) 2>/dev/null;
+}
+restore_env() {
+  test "$savedpath" && export LD_LIBRARY_PATH="$savedpath";
+  test "$savedpre" && export LD_PRELOAD="$savedpre";
+  umount_all;
+  ($bb mv -f /system_link /system;
+  $bb mv -f /system_root_link /system_root) 2>/dev/null;
 }
 abort() {
-  ui_print "$*";
+  ui_print "$@";
   debugging;
   if [ ! -f anykernel.sh -o "$(file_getprop anykernel.sh do.cleanuponabort 2>/dev/null)" == 1 ]; then
     cleanup;
   fi;
-  unmount_all;
+  restore_env;
   exit 1;
 }
 
@@ -89,38 +115,46 @@ if [ $? != 0 -o -z "$(ls bin)" ]; then
 fi;
 
 if [ -f banner ]; then
-  while IFS='' read -r line || $bb [[ -n "$line" ]]; do
-    ui_print "$line";
-  done < banner;
+  ui_printfile banner;
   ui_print " " " ";
 fi;
 
 ui_print "$(file_getprop anykernel.sh kernel.string)";
 if [ -f version ]; then
   ui_print " ";
-  while IFS='' read -r line || $bb [[ -n "$line" ]]; do
-    ui_print "$line";
-  done < version;
+  ui_printfile version;
   ui_print " ";
 fi;
 ui_print " " "AnyKernel3 by osm0sis @ xda-developers" " " " ";
 
-unmount_all;
-if ! is_mounted /system; then
-  $bb mount -o rw -t auto /system;
+umount_all;
+setup_mountpoint $ANDROID_ROOT;
+if ! is_mounted $ANDROID_ROOT; then
+  $bb mount -o rw -t auto $ANDROID_ROOT;
 fi;
-($bb mount -o rw -t auto /vendor;
-$bb mount /data;
-$bb mount /cache;) 2>/dev/null;
-if [ -f /system/system/build.prop ]; then
-  SAROOT=true
-  [ -L /system_root ] && rm -f /system_root
-  mkdir /system_root
-  $bb mount --move /system /system_root
-  $bb mount -o bind /system_root/system /system
-else
-  SAROOT=false
+case $ANDROID_ROOT in
+  /system_root) setup_mountpoint /system;;
+  /system)
+    if [ -f /system/system/build.prop ]; then
+      setup_mountpoint /system_root;
+      $bb mount --move /system /system_root;
+      if [ $? != 0 ]; then
+        $bb umount /system;
+        $bb umount -l /system 2>/dev/null;
+        $bb mount -o rw -t auto /dev/block/bootdevice/by-name/system /system_root;
+      fi;
+    fi;
+  ;;
+esac;
+if is_mounted /system_root; then
+  $bb mount -o bind /system_root/system /system;
 fi;
+$bb mount -o rw -t auto /vendor 2>/dev/null;
+if ! is_mounted /data; then
+  $bb mount /data;
+  umount_data=1;
+fi;
+
 savedpath="$LD_LIBRARY_PATH";
 savedpre="$LD_PRELOAD";
 unset LD_LIBRARY_PATH;
@@ -205,7 +239,7 @@ fi;
 ui_print "Installing...";
 core=$($bb grep -oE 'ak.*core.sh' anykernel.sh);
 test -f tools/$core || $bb ln -s $home/tools/ak*-core.sh $home/tools/$core;
-PATH="$home/bin:$PATH" home=$home ZIPFILE=$ZIPFILE SAROOT=$SAROOT $bb ash anykernel.sh $2;
+PATH="$home/bin:$PATH" home=$home ZIPFILE=$ZIPFILE $bb ash anykernel.sh $2;
 if [ $? != 0 ]; then
   abort;
 fi;
@@ -248,9 +282,6 @@ if [ "$(file_getprop anykernel.sh do.cleanup)" == 1 ]; then
   cleanup;
 fi;
 
-test "$savedpath" && export LD_LIBRARY_PATH="$savedpath";
-test "$savedpre" && export LD_PRELOAD="$savedpre";
-
-unmount_all;
+restore_env;
 
 ui_print " " " " "Done!";
