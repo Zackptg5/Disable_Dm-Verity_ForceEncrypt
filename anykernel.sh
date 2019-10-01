@@ -130,9 +130,9 @@ if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
     ui_print "   $i"
     PERM="$(/system/bin/toybox ls -Z $i | $bb awk '{print $1}')"
     $KEEPFORCEENCRYPT || sed -i "
-      s/forceencrypt=/encryptable=/g
-      s/forcefdeorfbe=/encryptable=/g
-      s/fileencryption=/encryptable=/g
+      s/forceencrypt=/=/g
+      s/forcefdeorfbe=/=/g
+      s/fileencryption=/=/g
     " "$i"
     $KEEPVERITY || sed -i "
       s/,verify//g
