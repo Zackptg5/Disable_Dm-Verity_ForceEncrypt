@@ -59,6 +59,20 @@ ui_print "- Unpacking boot img..."
 split_boot;
 cd $split_img
 
+# Check ramdisk status
+if [ -e ramdisk.cpio ]; then
+  ./magiskboot cpio ramdisk.cpio test
+  STATUS=$?
+else
+  # Stock A only system-as-root
+  STATUS=0
+fi
+
+if [ $((STATUS & 8)) -ne 0 ]; then
+  # Possibly using 2SI, export env var
+  export TWOSTAGEINIT=true
+fi
+
 # Make supersu and magisk config files
 if [ "$ROOT" == "Magisk" ]; then
   if [ -e ramdisk.cpio ] && $bin/magiskboot cpio ramdisk.cpio "exists .backup/.magisk"; then
@@ -161,7 +175,7 @@ else
 fi
 if [ -e ramdisk.cpio ]; then
   ui_print "- Patching ramdisk..."
-  $bin/magiskboot cpio ramdisk.cpio "patch $KEEPVERITY $KEEPFORCEENCRYPT $KEEPQUOTA"
+  $bin/magiskboot cpio ramdisk.cpio patch
   [ "$ROOT" != "SuperSU" ] && $bin/magiskboot cpio ramdisk.cpio "mkdir 000 .backup" "add 000 .backup/.magisk $home/config"
 fi
 if [ "$ROOT" != "SuperSU" ]; then
@@ -172,13 +186,15 @@ if [ "$ROOT" != "SuperSU" ]; then
   fi
 fi
 
-# Binary patches
-if ! $KEEPVERITY; then
-  for dt in dtb kernel_dtb extra recovery_dtbo; do
-    [ -f $dt ] && $bin/magiskboot dtb-patch $dt && ui_print "- Removing dm(avb)-verity in $dt"
-  done
-fi
+# Kernel cmdline patch
+[ -f header ] && sed -i -e "s/Android:#[a-zA-Z0-9]* //" -e "s/android-verity/linear/" header
 
+# Dtb patches
+for dt in dtb kernel_dtb extra recovery_dtbo; do
+  [ -f $dt ] && $bin/magiskboot dtb $dt patch && ui_print "- Patching fstab in $dt"
+done
+
+# Shitsung patches
 if [ -f kernel ]; then
   # Remove Samsung RKP
   $bin/magiskboot hexpatch kernel \

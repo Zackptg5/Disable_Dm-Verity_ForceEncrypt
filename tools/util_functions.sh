@@ -60,6 +60,18 @@ mount_part() {
 }
 
 get_flags() {
+  # Get zipname variables
+  OIFS=$IFS; IFS=\|;
+  ZIPFILE="$(echo $(basename $ZIPFILE) | tr '[:upper:]' '[:lower:]')"
+  while true; do
+    case $ZIPFILE in
+      *fec*|*forceencrypt*) KEEPFORCEENCRYPT=false; ZIPFILE=$(echo $ZIPFILE | sed -r "s/(fec|forceencrypt)//g");;
+      *verity*) KEEPVERITY=false; ZIPFILE=$(echo $ZIPFILE | sed "s/verity//g");;
+      *quota*) KEEPQUOTA=false; ZIPFILE=$(echo $ZIPFILE | sed "s/quota//g");;
+      *) break;;
+    esac
+  done
+  IFS=$OIFS
   # override variables
   if [ -z $KEEPVERITY ]; then
     if [ -f /system_root/init.rc ]; then
@@ -81,15 +93,20 @@ get_flags() {
     fi
   fi
   [ -z $KEEPQUOTA ] && KEEPQUOTA=true
+  export KEEPVERITY
+  export KEEPFORCEENCRYPT
+  export KEEPQUOTA
 }
 
 patch_dtbo_image() {
   local DTBOIMAGE=`find_block dtbo$SLOT`
   if [ ! -z $DTBOIMAGE ]; then
     ui_print "- DTBO image: $DTBOIMAGE"
-    if $bin/magiskboot --dtb-test $DTBOIMAGE; then
+    local PATCHED=dtbo
+    if $MAGISKBIN/magiskboot dtb $DTBOIMAGE patch $PATCHED; then
       ui_print "- Patching DTBO to remove avb-verity"
-      $bin/magiskboot --dtb-patch $DTBOIMAGE
+      cat $PATCHED /dev/zero > $DTBOIMAGE
+      rm -f $PATCHED
       return 0
     fi
   fi
@@ -131,18 +148,6 @@ supersuimg_mount() {
 ########
 # Flags
 ########
-
-OIFS=$IFS; IFS=\|;
-ZIPFILE="$(echo $(basename $ZIPFILE) | tr '[:upper:]' '[:lower:]')"
-while true; do
-  case $ZIPFILE in
-    *fec*|*forceencrypt*) KEEPFORCEENCRYPT=false; ZIPFILE=$(echo $ZIPFILE | sed -r "s/(fec|forceencrypt)//g");;
-    *verity*) KEEPVERITY=false; ZIPFILE=$(echo $ZIPFILE | sed "s/verity//g");;
-    *quota*) KEEPQUOTA=false; ZIPFILE=$(echo $ZIPFILE | sed "s/quota//g");;
-    *) break;;
-  esac
-done
-IFS=$OIFS
 
 check_data
 get_flags
