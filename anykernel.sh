@@ -166,12 +166,11 @@ if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
     " "$i"
     chcon $PERM $i
   done
-else
+elif [ -e ramdisk.cpio ]; then
   ui_print "- Disabling dm_verity in default.prop..."
   $bin/magiskboot cpio ramdisk.cpio "extract default.prop default.prop"
   sed -i "s/ro.config.dmverity=.*/ro.config.dmverity=false/" default.prop
   $bin/magiskboot cpio ramdisk.cpio "add 0644 default.prop default.prop"
-  $bin/magiskboot cpio ramdisk.cpio "rm verity_key"
 fi
 if [ -e ramdisk.cpio ]; then
   ui_print "- Patching ramdisk..."
