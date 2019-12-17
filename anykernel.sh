@@ -29,6 +29,24 @@ ramdisk_compression=auto;
 . tools/ak3-core.sh;
 . tools/util_functions.sh
 
+# Fix for Android Q roms on non-Q TWRP
+if [ $API -ge 29 ]; then
+  alias ls="/sbin/ls"
+  if [ -d /system/apex ]; then
+    [ -L /apex ] && rm -f /apex
+    for i in /system/apex/*; do
+      [ -d $i ] || break
+      local APEX=$(basename $i)
+      case $APEX in
+        "com.android.runtime.release") mkdir -p /apex/com.android.runtime 2>/dev/null; mount -o bind $i /apex/com.android.runtime;;
+        *) mkdir -p /apex/$APEX 2>/dev/null; mount -o bind $i /apex/$APEX;;
+      esac
+    done
+  fi
+else
+  alias ls="/system/bin/toybox ls"
+fi
+
 
 ## AnyKernel file attributes
 # set permissions/ownership for included ramdisk files
@@ -41,15 +59,10 @@ ui_print "- Detecting Root Method..."
 if [ -d $MAGISKBIN ]; then
   ROOT="Magisk"; ui_print "   MagiskSU detected!"
 else
-  supersuimg_mount
-  if [ "$supersuimg" ] || [ -d /su ]; then
-    ROOT="SuperSU"; ui_print "   Systemless SuperSU detected!"
-  elif [ -e "$(find /data /cache -name supersu_is_here | head -n1)" ]; then
-    ROOT="SuperSU"; ui_print "   Systemless SuperSU detected!"
-  elif [ -d /system/su ] || [ -f /system/xbin/daemonsu ] || [ -f /system/xbin/sugote ]; then
-    ROOT="SuperSU"; ui_print "   System SuperSU detected!"
+  if [ "$supersuimg" ] || [ -d /su ] || [ -e "$(find /data /cache -name supersu_is_here | head -n1)" ] || [ -d /system/su ] || [ -f /system/xbin/daemonsu ] || [ -f /system/xbin/sugote ]; then
+    ROOT="SuperSU"; ui_print "   SuperSU detected!"
   elif [ -f /system/xbin/su ]; then
-    [ "$(grep "SuperSU" /system/xbin/su)" ] && { ROOT="SuperSU"; ui_print "   System SuperSU detected!"; }
+    [ "$(grep "SuperSU" /system/xbin/su)" ] && { ROOT="SuperSU"; ui_print "   SuperSU detected!"; } || ui_print "   No Magisk or SuperSu detected!"
   else
     ui_print "   No Magisk or SuperSu detected!"
   fi
@@ -61,7 +74,7 @@ cd $split_img
 
 # Check ramdisk status
 if [ -e ramdisk.cpio ]; then
-  ./magiskboot cpio ramdisk.cpio test
+  $bin/magiskboot cpio ramdisk.cpio test
   STATUS=$?
 else
   # Stock A only system-as-root
@@ -74,6 +87,34 @@ if [ $((STATUS & 8)) -ne 0 ]; then
 fi
 
 # Make supersu and magisk config files
+make_config() {
+  case $ROOT in
+    "Magisk") local FILE=$home/config FILE2=".magisk";;
+    "SuperSU") local FILE=/data/.supersu FILE2=".supersu";;
+    *) ui_print "- Creating .magisk and .supersu files..."
+       echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > $home/config
+       cp -f $home/config /data/.supersu
+       echo "REMOVEENCRYPTABLE=$REMOVEENCRYPTABLE" >> /data/.supersu
+       return 0;;
+  esac
+  if [ -f $FILE ]; then
+    ui_print "- Modifying existing $FILE2 file..."
+    for i in "KEEPFORCEENCRYPT" "KEEPVERITY" "REMOVEENCRYPTABLE"; do
+      local j=$(eval echo "\$$i")
+      [ "$i" == "REMOVEENCRYPTABLE" ] && [ "$ROOT" == "Magisk" ] && continue
+      if [ "$(grep "$i=" $FILE)" ]; then
+        sed -i "s/$i=.*/$i=$j/" $FILE
+      else
+        echo "$i=$j" >> $FILE
+      fi
+    done
+  else
+    ui_print "- Creating $FILE2 file..."
+    echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > $FILE
+    [ "$ROOT" == "SuperSU" ] && echo "REMOVEENCRYPTABLE=$REMOVEENCRYPTABLE" >> $FILE
+  fi
+}
+
 if [ "$ROOT" == "Magisk" ]; then
   if [ -e ramdisk.cpio ] && $bin/magiskboot cpio ramdisk.cpio "exists .backup/.magisk"; then
     $bin/magiskboot cpio ramdisk.cpio "extract .backup/.magisk $home/config"
@@ -83,56 +124,19 @@ if [ "$ROOT" == "Magisk" ]; then
     done
   fi
   rm -f /data/.magisk /cache/.magisk /system/.magisk 2>/dev/null
-  if [ -f $home/config ]; then
-    ui_print "- Modifying existing .magisk file..."
-    if [ "$(grep 'KEEPFORCEENCRYPT=' $home/config)" ]; then
-      sed -i "s/KEEPFORCEENCRYPT=.*/KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT/" $home/config
-    else
-      echo "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT" >> $home/config
-    fi
-    if [ "$(grep 'KEEPVERITY=' $home/config)" ]; then
-      sed -i "s/KEEPVERITY=.*/KEEPVERITY=$KEEPVERITY/" $home/config
-    else
-      echo "KEEPVERITY=$KEEPVERITY" >> $home/config
-    fi
-  else
-    ui_print "- Creating .magisk file..."
-    echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > $home/config
-  fi
-elif [ "$ROOT" == "SuperSU" ]; then
-  if [ -f "/data/.supersu" ]; then
-    ui_print "- Modifying existing .supersu file..."
-    if [ "$(grep 'KEEPFORCEENCRYPT=' /data/.supersu)" ]; then
-      sed -i "s/KEEPFORCEENCRYPT=.*/KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT/" /data/.supersu
-    else
-      echo "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT" >> /data/.supersu
-    fi
-    if [ "$(grep 'KEEPVERITY=' /data/.supersu)" ]; then
-      sed -i "s/KEEPVERITY=.*/KEEPVERITY=$KEEPVERITY/" /data/.supersu
-    else
-      echo "KEEPVERITY=$KEEPVERITY" >> /data/.supersu
-    fi
-    if [ "$(grep 'REMOVEENCRYPTABLE=' /data/.supersu)" ]; then
-      sed -i "s/REMOVEENCRYPTABLE=.*/REMOVEENCRYPTABLE=false/" /data/.supersu
-    else
-      echo "REMOVEENCRYPTABLE=false" >> /data/.supersu
-    fi
-  else
-    ui_print "- Creating .supersu file..."
-    echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > /data/.supersu
-  fi
+  make_config
 else
-  ui_print "- Creating .magisk and .supersu files..."
-  echo -e "KEEPFORCEENCRYPT=$KEEPFORCEENCRYPT\nKEEPVERITY=$KEEPVERITY\n" > $home/config
-  cp -f $home/config /data/.supersu
+  make_config
 fi
 
-[ -d /system_root ] && FSTABS="$(find /system_root -type f \( -name "fstab.*" -o -name "*.fstab" \) -not \( -path "./system*" -o -path "./vendor*" \) | sed "s|^./||")"
-FSTABS="$FSTABS /system/vendor/etc/fstab*"
+FSTABS="$(find /system /vendor -type f \( -name "fstab.*" -o -name "*.fstab" \) | sed "s|^./||")"
+[ -z $FSTABS ] || FSTABS="$FSTABS "
+# [ -d /system_root ] && FSTABS2="$FSTABS$(find /system_root -type f \( -name "fstab.*" -o -name "*.fstab" \) -not \( -path "./system*" -o -path "./vendor*" \) | sed "s|^./||")"
+# [ -z $FSTABS2 ] || { FSTABS2="$FSTABS2 "; FSTABS=$FSTABS2; FSTABS2=""; }
 for i in odm nvdata; do
   if [ "$(find /dev/block -iname $i | head -n 1)" ]; then
     mount_part $i
-    [ "$i" == "nvdata" ] && FSTABS="$FSTABS /$i/fstab*" || FSTABS="$FSTABS /$i/etc/fstab*"
+    [ "$i" == "nvdata" ] && FSTABS="$FSTABS/$i/fstab*" || FSTABS="$FSTABS/$i/etc/fstab*"
   fi
 done
 
@@ -142,7 +146,7 @@ if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
   for i in $FSTABS; do
     [ -f "$i" ] || continue
     ui_print "   $i"
-    PERM="$(/system/bin/toybox ls -Z $i | $bb awk '{print $1}')"
+    PERM="$(ls -Z $i | $bb awk '{print $1}')"
     $KEEPFORCEENCRYPT || sed -i "
       s/forceencrypt=/=/g
       s/forcefdeorfbe=/=/g
@@ -213,3 +217,10 @@ done
 $KEEPVERITY || patch_dtbo_image
 ui_print "- Repacking boot img..."
 flash_boot;
+
+if [ $API -ge 29 ] && [ -d /system/apex ]; then
+  for i in /apex/*; do
+    [ -d $i ] || break
+    umount -l $i 2>/dev/null
+  done
+fi

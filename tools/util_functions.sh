@@ -73,8 +73,10 @@ get_flags() {
   done
   IFS=$OIFS
   # override variables
+  grep ' / ' /proc/mounts | grep -qv 'rootfs' || grep -q ' /system_root ' /proc/mounts && SYSTEM_ROOT=true || SYSTEM_ROOT=false
+  ! $SYSTEM_ROOT && [ -f /system_root/init.rc ] && SYSTEM_ROOT=true
   if [ -z $KEEPVERITY ]; then
-    if [ -f /system_root/init.rc ]; then
+    if $SYSTEM_ROOT; then
       KEEPVERITY=true
       ui_print "- System-as-root, keep dm/avb-verity"
     else
@@ -127,22 +129,19 @@ check_data() {
   MAGISKBIN=$NVBASE/magisk
 }
 
-supersuimg_mount() {
-  supersuimg=$(ls /cache/su.img /data/su.img 2>/dev/null)
-  if [ "$supersuimg" ]; then
-    if ! is_mounted /su; then
-      ui_print "- Mounting /su"
-      [ -d /su ] || mkdir /su 2>/dev/null
-      mount -t ext4 -o rw,noatime $supersuimg /su 2>/dev/null
-      for i in 0 1 2 3 4 5 6 7; do
-        is_mounted /su && break
-        local loop=/dev/block/loop$i
-        mknod $loop b 7 $i
-        losetup $loop $supersuimg
-        mount -t ext4 -o loop $loop /su 2>/dev/null
-      done
-    fi
-  fi
+api_level_arch_detect() {
+  API=`file_getprop /system/build.prop ro.build.version.sdk`
+  ABI=`file_getprop /system/build.prop ro.product.cpu.abi | cut -c-3`
+  ABI2=`file_getprop /system/build.prop ro.product.cpu.abi2 | cut -c-3`
+  ABILONG=`file_getprop /system/build.prop ro.product.cpu.abi`
+
+  ARCH=arm
+  ARCH32=arm
+  IS64BIT=false
+  if [ "$ABI" = "x86" ]; then ARCH=x86; ARCH32=x86; fi;
+  if [ "$ABI2" = "x86" ]; then ARCH=x86; ARCH32=x86; fi;
+  if [ "$ABILONG" = "arm64-v8a" ]; then ARCH=arm64; ARCH32=arm; IS64BIT=true; fi;
+  if [ "$ABILONG" = "x86_64" ]; then ARCH=x64; ARCH32=x86; IS64BIT=true; fi;
 }
 
 ########
@@ -151,6 +150,7 @@ supersuimg_mount() {
 
 check_data
 get_flags
+api_level_arch_detect
 
 ui_print " "
 ui_print "- Chosen/Default Arguments:"

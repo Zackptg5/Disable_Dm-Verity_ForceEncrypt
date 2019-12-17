@@ -164,11 +164,15 @@ unset LD_PRELOAD;
 
 if [ ! "$(getprop 2>/dev/null)" ]; then
   getprop() {
-    local propval="$(file_getprop /default.prop $1 2>/dev/null)";
-    test "$propval" || local propval="$(file_getprop /system/build.prop $1 2>/dev/null)";
+    local propdir propfile propval;
+    for propdir in / /system_root /system /vendor /odm /product; do
+      for propfile in default.prop build.prop; do
+        test "$propval" && break 2 || propval="$(file_getprop $propdir/$propfile $1 2>/dev/null)";
+      done;
+    done;
     test "$propval" && echo "$propval" || echo "";
   }
-elif [ ! "$(getprop ro.product.device 2>/dev/null)" -a ! "$(getprop ro.build.product 2>/dev/null)" ]; then
+elif [ ! "$(getprop ro.build.type 2>/dev/null)" ]; then
   getprop() {
     ($(which getprop) | $bb grep "$1" | $bb cut -d[ -f3 | $bb cut -d] -f1) 2>/dev/null;
   }
@@ -176,14 +180,18 @@ fi;
 
 if [ "$(file_getprop anykernel.sh do.devicecheck)" == 1 ]; then
   ui_print "Checking device...";
-  device=$(getprop ro.product.device);
-  product=$(getprop ro.build.product);
+  device=$(getprop ro.product.device 2>/dev/null);
+  product=$(getprop ro.build.product 2>/dev/null);
+  vendordevice=$(getprop ro.product.vendor.device 2>/dev/null);
+  vendorproduct=$(getprop ro.vendor.product.device 2>/dev/null);
   for testname in $(file_getprop anykernel.sh 'device.name.*'); do
-    if [ "$device" == "$testname" -o "$product" == "$testname" ]; then
-      ui_print "$testname" " ";
-      match=1;
-      break;
-    fi;
+    for devicename in $device $product $vendordevice $vendorproduct; do
+      if [ "$devicename" == "$testname" ]; then
+        ui_print "$testname" " ";
+        match=1;
+        break 2;
+      fi;
+    done;
   done;
   if [ ! "$match" ]; then
     abort " " "Unsupported device. Aborting...";
