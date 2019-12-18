@@ -129,28 +129,12 @@ check_data() {
   MAGISKBIN=$NVBASE/magisk
 }
 
-api_level_arch_detect() {
-  API=`file_getprop /system/build.prop ro.build.version.sdk`
-  ABI=`file_getprop /system/build.prop ro.product.cpu.abi | cut -c-3`
-  ABI2=`file_getprop /system/build.prop ro.product.cpu.abi2 | cut -c-3`
-  ABILONG=`file_getprop /system/build.prop ro.product.cpu.abi`
-
-  ARCH=arm
-  ARCH32=arm
-  IS64BIT=false
-  if [ "$ABI" = "x86" ]; then ARCH=x86; ARCH32=x86; fi;
-  if [ "$ABI2" = "x86" ]; then ARCH=x86; ARCH32=x86; fi;
-  if [ "$ABILONG" = "arm64-v8a" ]; then ARCH=arm64; ARCH32=arm; IS64BIT=true; fi;
-  if [ "$ABILONG" = "x86_64" ]; then ARCH=x64; ARCH32=x86; IS64BIT=true; fi;
-}
-
 ########
 # Flags
 ########
 
 check_data
 get_flags
-api_level_arch_detect
 
 ui_print " "
 ui_print "- Chosen/Default Arguments:"

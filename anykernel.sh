@@ -29,24 +29,38 @@ ramdisk_compression=auto;
 . tools/ak3-core.sh;
 . tools/util_functions.sh
 
-# Fix for Android Q roms on non-Q TWRP
-if [ $API -ge 29 ]; then
-  alias ls="/sbin/ls"
-  if [ -d /system/apex ]; then
-    [ -L /apex ] && rm -f /apex
+# Mount apex files so dynamic linked stuff works
+if [ -d /system/apex ]; then
+  [ -L /apex ] && rm -f /apex
+  # Apex files present - needs to extract and mount the payload imgs
+  if [ -f "/system/apex/com.android.runtime.release.apex" ]; then
+    j=0
+    for i in /system/apex/*.apex; do
+      DEST="/apex/$(basename $i | sed 's/.apex$//')"
+      [ "$DEST" == "/apex/com.android.runtime.release" ] && DEST="/apex/com.android.runtime"
+      mkdir -p $DEST
+      $bb unzip -qo $i apex_payload.img -d /apex
+      mv -f /apex/apex_payload.img $DEST.img
+      while [ $j -lt 50 ]; do
+        loop=/dev/loop$j
+        $bb mknod $loop b 7 $j 2>/dev/null
+        $bb losetup $loop $DEST.img 2>/dev/null
+        j=$((j + 1))
+        $bb losetup $loop | grep -q $DEST.img && break
+      done;
+      [ -z $floop ] && floop=$((j - 1))
+      $bb mount -t ext4 -o loop,noatime,ro $loop $DEST || return 1
+    done
+  # Already extracted payload imgs present, just mount the folders
+  elif [ -d "/system/apex/com.android.runtime.release" ]; then
     for i in /system/apex/*; do
-      [ -d $i ] || break
-      local APEX=$(basename $i)
-      case $APEX in
-        "com.android.runtime.release") mkdir -p /apex/com.android.runtime 2>/dev/null; mount -o bind $i /apex/com.android.runtime;;
-        *) mkdir -p /apex/$APEX 2>/dev/null; mount -o bind $i /apex/$APEX;;
-      esac
+      DEST="/apex/$(basename $i)"
+      [ "$DEST" == "/apex/com.android.runtime.release" ] && DEST="/apex/com.android.runtime"
+      mkdir -p $DEST
+      $bb mount -o bind,ro $i $DEST
     done
   fi
-else
-  alias ls="/system/bin/toybox ls"
 fi
-
 
 ## AnyKernel file attributes
 # set permissions/ownership for included ramdisk files
@@ -146,7 +160,7 @@ if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
   for i in $FSTABS; do
     [ -f "$i" ] || continue
     ui_print "   $i"
-    PERM="$(ls -Z $i | $bb awk '{print $1}')"
+    PERM="$(/system/bin/ls -Z $i | $bb awk '{print $1}')"
     $KEEPFORCEENCRYPT || sed -i "
       s/forceencrypt=/=/g
       s/forcefdeorfbe=/=/g
@@ -218,9 +232,18 @@ $KEEPVERITY || patch_dtbo_image
 ui_print "- Repacking boot img..."
 flash_boot;
 
-if [ $API -ge 29 ] && [ -d /system/apex ]; then
+# Unmount apex
+if [ -d /system/apex ]; then
   for i in /apex/*; do
-    [ -d $i ] || break
-    umount -l $i 2>/dev/null
+    $bb umount -l $i 2>/dev/null
   done
+  if [ -f "/system/apex/com.android.runtime.release.apex" ]; then
+    j=$floop
+    while [ $j -lt 50 ]; do
+      loop=/dev/loop$j
+      $bb losetup -d $loop || break
+      j=$((j + 1))
+    done
+  fi
+  rm -rf /apex
 fi
