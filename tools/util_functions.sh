@@ -53,7 +53,7 @@ mount_part() {
   ui_print "- Mounting $PART"
   mount -o rw $POINT 2>/dev/null
   if ! is_mounted $POINT; then
-    local BLOCK=`find_block $PART$SLOT`
+    local BLOCK=`find_block $PART$slot`
     mount -o rw $BLOCK $POINT
   fi
   is_mounted $POINT || abort "! Cannot mount $POINT"
@@ -87,6 +87,11 @@ get_flags() {
     grep ' /data ' /proc/mounts | grep -q 'dm-' && FDE=true || FDE=false
     [ -d /data/unencrypted ] && FBE=true || FBE=false
     # No data access means unable to decrypt in recovery
+    DATA=false
+    if grep ' /data ' /proc/mounts | grep -vq 'tmpfs'; then
+      # Test if data is writable
+      touch /data/.rw && rm /data/.rw && DATA=true
+    fi
     if $FDE || $FBE || ! $DATA; then
       KEEPFORCEENCRYPT=true
       ui_print "- Encrypted data, keep forceencrypt"
@@ -101,39 +106,23 @@ get_flags() {
 }
 
 patch_dtbo_image() {
-  local DTBOIMAGE=`find_block dtbo$SLOT`
+  local DTBOIMAGE=`find_block dtbo$slot`
   if [ ! -z $DTBOIMAGE ]; then
     ui_print "- DTBO image: $DTBOIMAGE"
-    local PATCHED=dtbo
-    if $MAGISKBIN/magiskboot dtb $DTBOIMAGE patch $PATCHED; then
+    if $bin/magiskboot dtb $DTBOIMAGE patch dtbo; then
       ui_print "- Patching DTBO to remove avb-verity"
-      cat $PATCHED /dev/zero > $DTBOIMAGE
-      rm -f $PATCHED
+      cat dtbo /dev/zero > $DTBOIMAGE
+      rm -f dtbo
       return 0
     fi
   fi
   return 1
 }
 
-check_data() {
-  DATA=false
-  DATA_DE=false
-  if grep ' /data ' /proc/mounts | grep -vq 'tmpfs'; then
-    # Test if data is writable
-    touch /data/.rw && rm /data/.rw && DATA=true
-    # Test if DE storage is writable
-    $DATA && [ -d /data/adb ] && touch /data/adb/.rw && rm /data/adb/.rw && DATA_DE=true
-  fi
-  $DATA && NVBASE=/data || NVBASE=/cache/data_adb
-  $DATA_DE && NVBASE=/data/adb
-  MAGISKBIN=$NVBASE/magisk
-}
-
 ########
 # Flags
 ########
 
-check_data
 get_flags
 
 ui_print " "
