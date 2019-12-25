@@ -1,10 +1,3 @@
-#########################################
-#
-# Magisk General Utility Functions
-# by topjohnwu
-#
-#########################################
-
 ###################
 # Helper Functions
 ###################
@@ -59,12 +52,27 @@ mount_part() {
   is_mounted $POINT || abort "! Cannot mount $POINT"
 }
 
+check_data() {
+  DATA=false
+  DATA_DE=false
+  if grep ' /data ' /proc/mounts | grep -vq 'tmpfs'; then
+    # Test if data is writable
+    touch /data/.rw && rm /data/.rw && DATA=true
+    # Test if DE storage is writable
+    $DATA && [ -d /data/adb ] && touch /data/adb/.rw && rm /data/adb/.rw && DATA_DE=true
+  fi
+  $DATA && NVBASE=/data || NVBASE=/cache/data_adb
+  $DATA_DE && NVBASE=/data/adb
+  MAGISKBIN=$NVBASE/magisk
+}
+
 get_flags() {
   # Get zipname variables
   OIFS=$IFS; IFS=\|;
   ZIPFILE="$(echo $(basename $ZIPFILE) | tr '[:upper:]' '[:lower:]')"
   while true; do
     case $ZIPFILE in
+      "package.zip") get_key_opts; break;;
       *fec*|*forceencrypt*) KEEPFORCEENCRYPT=false; ZIPFILE=$(echo $ZIPFILE | sed -r "s/(fec|forceencrypt)//g");;
       *verity*) KEEPVERITY=false; ZIPFILE=$(echo $ZIPFILE | sed "s/verity//g");;
       *quota*) KEEPQUOTA=false; ZIPFILE=$(echo $ZIPFILE | sed "s/quota//g");;
@@ -87,11 +95,6 @@ get_flags() {
     grep ' /data ' /proc/mounts | grep -q 'dm-' && FDE=true || FDE=false
     [ -d /data/unencrypted ] && FBE=true || FBE=false
     # No data access means unable to decrypt in recovery
-    DATA=false
-    if grep ' /data ' /proc/mounts | grep -vq 'tmpfs'; then
-      # Test if data is writable
-      touch /data/.rw && rm /data/.rw && DATA=true
-    fi
     if $FDE || $FBE || ! $DATA; then
       KEEPFORCEENCRYPT=true
       ui_print "- Encrypted data, keep forceencrypt"
@@ -119,10 +122,108 @@ patch_dtbo_image() {
   return 1
 }
 
+mount_apex() {
+  # Mount apex files so dynamic linked stuff works
+  if [ -d /system/apex ]; then
+    [ -L /apex ] && rm -f /apex
+    # Apex files present - needs to extract and mount the payload imgs
+    if [ -f "/system/apex/com.android.runtime.release.apex" ]; then
+      local j=0 k=0
+      for i in /system/apex/*.apex; do
+        local DEST="/apex/$(basename $i | sed 's/.apex$//')"
+        [ "$DEST" == "/apex/com.android.runtime.release" ] && DEST="/apex/com.android.runtime"
+        mkdir -p $DEST
+        unzip -qo $i apex_payload.img -d /apex
+        mv -f /apex/apex_payload.img $DEST.img
+        while [ $j -lt 100 ]; do
+          local loop=/dev/loop$j
+          mknod $loop b 7 $k 2>/dev/null
+          losetup $loop $DEST.img 2>/dev/null
+          j=$((j + 1))
+          k=$((k + 8))
+          losetup $loop | grep -q $DEST.img && break
+        done;
+        [ -z $floop ] && floop=$((j - 1))
+        mount -t ext4 -o loop,noatime,ro $loop $DEST || return 1
+      done
+    # Already extracted payload imgs present, just mount the folders
+    elif [ -d "/system/apex/com.android.runtime.release" ]; then
+      for i in /system/apex/*; do
+        local DEST="/apex/$(basename $i)"
+        [ "$DEST" == "/apex/com.android.runtime.release" ] && DEST="/apex/com.android.runtime"
+        mkdir -p $DEST
+        mount -o bind,ro $i $DEST
+      done
+    fi
+  fi
+}
+
+umount_apex() {
+  # Unmount apex
+  if [ -d /system/apex ]; then
+    for i in /apex/*; do
+      umount -l $i 2>/dev/null
+    done
+    if [ -f "/system/apex/com.android.runtime.release.apex" ]; then
+      j=$floop
+      while [ $j -lt 100 ]; do
+        loop=/dev/loop$j
+        losetup -d $loop 2>/dev/null || break
+        j=$((j + 1))
+      done
+    fi
+    rm -rf /apex
+  fi
+}
+
+chooseport() {
+  # Keycheck binary by someone755 @Github, idea for code below by Zappo @xda-developers
+  # Calling it first time detects previous input. Calling it second time will do what we want
+  while true; do
+    $bin/keycheck
+    $bin/keycheck
+    local SEL=$?
+    if [ "$1" == "UP" ]; then
+      UP=$SEL
+      break
+    elif [ "$1" == "DOWN" ]; then
+      DOWN=$SEL
+      break
+    elif [ $SEL -eq $UP ]; then
+      return 0
+    elif [ $SEL -eq $DOWN ]; then
+      return 1
+    fi
+  done
+}
+
+get_key_opts() {
+  ui_print "  Sideload detected! Zipname options can't be read"
+  ui_print "  Using Vol Key selection method"
+  ui_print " "
+  ui_print "- Vol Key Programming -"
+  ui_print "  Press Vol Up"
+  chooseport "UP"
+  ui_print "  Press Vol Down"
+  chooseport "DOWN"
+  ui_print " "
+  ui_print "- Select Options -"
+  ui_print "  Vol+ = yes, Vol- = no"
+  ui_print " "
+  sleep 1
+  ui_print "  Disable verity?"
+  chooseport && KEEPVERITY=false
+  ui_print "  Disable force encryption?"
+  chooseport && KEEPFORCEENCRYPT=false
+  ui_print "  Disable Disc Quota? (Select 'no' if unsure)"
+  chooseport && KEEPQUOTA=false
+}
+
 ########
 # Flags
 ########
 
+check_data
 get_flags
 
 ui_print " "
