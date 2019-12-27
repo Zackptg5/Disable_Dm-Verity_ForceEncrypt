@@ -128,7 +128,8 @@ mount_apex() {
     [ -L /apex ] && rm -f /apex
     # Apex files present - needs to extract and mount the payload imgs
     if [ -f "/system/apex/com.android.runtime.release.apex" ]; then
-      local j=0 k=0
+      local j=0
+      [ -e /dev/block/loop1 ] && local minorx=$(ls -l /dev/block/loop1 | awk '{print $6}') || local minorx=1
       for i in /system/apex/*.apex; do
         local DEST="/apex/$(basename $i | sed 's/.apex$//')"
         [ "$DEST" == "/apex/com.android.runtime.release" ] && DEST="/apex/com.android.runtime"
@@ -137,13 +138,12 @@ mount_apex() {
         mv -f /apex/apex_payload.img $DEST.img
         while [ $j -lt 100 ]; do
           local loop=/dev/loop$j
-          mknod $loop b 7 $k 2>/dev/null
+          mknod $loop b 7 $((j * minorx))k 2>/dev/null
           losetup $loop $DEST.img 2>/dev/null
           j=$((j + 1))
-          k=$((k + 8))
           losetup $loop | grep -q $DEST.img && break
         done;
-        [ -z $floop ] && floop=$((j - 1))
+        uloop="$uloop $((j - 1))"
         mount -t ext4 -o loop,noatime,ro $loop $DEST || return 1
       done
     # Already extracted payload imgs present, just mount the folders
@@ -165,11 +165,9 @@ umount_apex() {
       umount -l $i 2>/dev/null
     done
     if [ -f "/system/apex/com.android.runtime.release.apex" ]; then
-      j=$floop
-      while [ $j -lt 100 ]; do
-        loop=/dev/loop$j
+      for i in $uloop; do
+        local loop=/dev/loop$i
         losetup -d $loop 2>/dev/null || break
-        j=$((j + 1))
       done
     fi
     rm -rf /apex

@@ -177,7 +177,6 @@ for dt in dtb kernel_dtb extra recovery_dtbo; do
   [ -f $dt ] && $bin/magiskboot dtb $dt patch && ui_print "- Patching fstab in $dt"
 done
 
-# Shitsung patches
 if [ -f kernel ]; then
   # Remove Samsung RKP
   $bin/magiskboot hexpatch kernel \
