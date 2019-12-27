@@ -138,7 +138,7 @@ mount_apex() {
         mv -f /apex/apex_payload.img $DEST.img
         while [ $j -lt 100 ]; do
           local loop=/dev/loop$j
-          mknod $loop b 7 $((j * minorx))k 2>/dev/null
+          mknod $loop b 7 $((j * minorx)) 2>/dev/null
           losetup $loop $DEST.img 2>/dev/null
           j=$((j + 1))
           losetup $loop | grep -q $DEST.img && break
