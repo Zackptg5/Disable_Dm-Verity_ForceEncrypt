@@ -111,7 +111,7 @@ else
   make_config
 fi
 
-FSTABS="$(find /system /vendor -type f \( -name "fstab.*" -o -name "*.fstab" \) | sed "s|^./||")"
+FSTABS="$(find /system /vendor -type f \( -name "fstab*" -o -name "*.fstab" \) | sed "s|^./||")"
 [ -z "$FSTABS" ] || FSTABS="$FSTABS "
 for i in odm nvdata; do
   if [ "$(find /dev/block -iname $i | head -n 1)" ]; then
