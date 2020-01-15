@@ -57,11 +57,14 @@ setup_mountpoint() {
 }
 is_mounted() { $bb mount | $bb grep -q " $1 "; }
 umount_all() {
-  ($bb umount /system;
-  $bb umount -l /system;
-  if [ -e /system_root ]; then
-    $bb umount /system_root;
-    $bb umount -l /system_root;
+   (if ! $BOOTMODE; then
+    umount_apex;
+    $bb umount /system;
+    $bb umount -l /system;
+    if [ -e /system_root ]; then
+      $bb umount /system_root;
+      $bb umount -l /system_root;
+    fi;
   fi;
   umount /vendor;
   umount -l /vendor;
@@ -70,11 +73,61 @@ umount_all() {
     $bb umount -l /data;
   fi) 2>/dev/null;
 }
+mount_apex() {
+  test -d /system/apex || return 1;
+  local apex dest loop minorx num;
+  setup_mountpoint /apex;
+  test -e /dev/block/loop1 && minorx=$(ls -l /dev/block/loop1 | $bb awk '{ print $6 }') || minorx=1;
+  num=0;
+  for apex in /system/apex/*; do
+    dest=/apex/$(basename $apex .apex);
+    test "$dest" == /apex/com.android.runtime.release && dest=/apex/com.android.runtime;
+    mkdir -p $dest;
+    case $apex in
+      *.apex)
+        $bb unzip -qo $apex apex_payload.img -d /apex;
+        $bb mv -f /apex/apex_payload.img $dest.img;
+        $bb mount -t ext4 -o ro,noatime $dest.img $dest 2>/dev/null;
+        if [ $? != 0 ]; then
+          while [ $num -lt 64 ]; do
+            loop=/dev/block/loop$num;
+            ($bb mknod $loop b 7 $((num * minorx));
+            $bb losetup $loop $dest.img) 2>/dev/null;
+            num=$((num + 1));
+            $bb losetup $loop | $bb grep -q $dest.img && break;
+          done;
+          $bb mount -t ext4 -o ro,loop,noatime $loop $dest;
+          if [ $? != 0 ]; then
+            $bb losetup -d $loop 2>/dev/null;
+          fi;
+        fi;
+      ;;
+      *) $bb mount -o bind $apex $dest;;
+    esac;
+  done;
+  export ANDROID_RUNTIME_ROOT=/apex/com.android.runtime;
+  export ANDROID_TZDATA_ROOT=/apex/com.android.tzdata;
+  export BOOTCLASSPATH=/apex/com.android.runtime/javalib/core-oj.jar:/apex/com.android.runtime/javalib/core-libart.jar:/apex/com.android.runtime/javalib/okhttp.jar:/apex/com.android.runtime/javalib/bouncycastle.jar:/apex/com.android.runtime/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/system/framework/android.test.base.jar:/apex/com.android.conscrypt/javalib/conscrypt.jar:/apex/com.android.media/javalib/updatable-media.jar;
+}
+umount_apex() {
+  test -d /apex || return 1;
+  local dest loop;
+  for dest in $($bb find /apex -type d -mindepth 1 -maxdepth 1); do
+    if [ -f $dest.img ]; then
+      loop=$($bb mount | $bb grep $dest | $bb cut -d" " -f1);
+    fi;
+    ($bb umount -l $dest;
+    $bb losetup -d $loop) 2>/dev/null;
+  done;
+  rm -rf /apex;
+  unset ANDROID_RUNTIME_ROOT ANDROID_TZDATA_ROOT BOOTCLASSPATH;
+}
 restore_env() {
   test "$savedpath" && export LD_LIBRARY_PATH="$savedpath";
   test "$savedpre" && export LD_PRELOAD="$savedpre";
   umount_all;
-  ($bb mv -f /system_link /system;
+  ($bb mv -f /apex_link /apex;
+  $bb mv -f /system_link /system;
   $bb mv -f /system_root_link /system_root;
   $bb umount -l /dev/random) 2>/dev/null;
 }
@@ -152,6 +205,7 @@ if is_mounted /system_root; then
   $bb mount -o bind /system_root/system /system;
 fi;
 $bb mount -o rw -t auto /vendor 2>/dev/null;
+$BOOTMODE || mount_apex;
 if ! is_mounted /data; then
   $bb mount /data;
   umount_data=1;

@@ -160,7 +160,7 @@ unpack_ramdisk() {
     mv -f ramdisk.cpio ramdisk.cpio.$comp;
     $bin/magiskboot decompress ramdisk.cpio.$comp ramdisk.cpio;
     if [ $? != 0 ]; then
-      echo "Attempting with busybox $comp..." >&2;
+      echo "Attempting ramdisk unpack with busybox $comp..." >&2;
       $comp -dc ramdisk.cpio.$comp > ramdisk.cpio;
     fi;
   fi;
@@ -210,10 +210,13 @@ repack_ramdisk() {
   test $? != 0 && packfail=1;
 
   cd $home;
+  $bin/magiskboot cpio ramdisk-new.cpio test;
+  magisk_patched=$?;
+  test $((magisk_patched & 3)) -eq 1 && $bin/magiskboot cpio ramdisk-new.cpio "extract .backup/.magisk $split_img/.magisk";
   if [ "$comp" ]; then
     $bin/magiskboot compress=$comp ramdisk-new.cpio;
     if [ $? != 0 ]; then
-      echo "Attempting with busybox $comp..." >&2;
+      echo "Attempting ramdisk repack with busybox $comp..." >&2;
       $comp -9c ramdisk-new.cpio > ramdisk-new.cpio.$comp;
       test $? != 0 && packfail=1;
       rm -f ramdisk-new.cpio;
@@ -233,7 +236,7 @@ repack_ramdisk() {
 
 # flash_boot (build, sign and write image only)
 flash_boot() {
-  local varlist kernel ramdisk cmdline part0 part1 nocompflag signfail pk8 cert avbtype;
+  local varlist i kernel ramdisk fdt cmdline comp part0 part1 nocompflag signfail pk8 cert avbtype;
 
   cd $split_img;
   if [ -f "$bin/mkimage" ]; then
@@ -302,15 +305,48 @@ flash_boot() {
     test "$dt" && dt="--dt $dt";
     $bin/mkbootimg --kernel $kernel --ramdisk $ramdisk --cmdline "$cmdline" --base $home --pagesize $pagesize --kernel_offset $kerneloff --ramdisk_offset $ramdiskoff --tags_offset "$tagsoff" $dt --output $home/boot-new.img;
   else
-    test "$kernel" && cp -f $kernel kernel 2>/dev/null;
-    test "$ramdisk" && cp -f $ramdisk ramdisk.cpio 2>/dev/null;
-    case $kernel in
-      *-dtb) rm -f kernel_dtb;;
-    esac;
+    if [ ! "$magisk_patched" ]; then
+      $bin/magiskboot cpio ramdisk.cpio test;
+      magisk_patched=$?;
+      test $((magisk_patched & 3)) -eq 1 && $bin/magiskboot cpio ramdisk.cpio "extract .backup/.magisk .magisk";
+    fi;
+    if [ "$kernel" ]; then
+      cp -f $kernel kernel;
+      if [ $((magisk_patched & 3)) -eq 1 ]; then
+        ui_print " " "Magisk detected! Patching kernel so reflashing Magisk is not necessary...";
+        comp=$($bin/magiskboot decompress kernel 2>&1 | grep -v 'raw' | sed -n 's;.*\[\(.*\)\];\1;p');
+        ($bin/magiskboot split $kernel || $bin/magiskboot decompress $kernel kernel) 2>/dev/null;
+        if [ $? != 0 -a "$comp" ]; then
+          echo "Attempting kernel unpack with busybox $comp..." >&2;
+          $comp -dc $kernel > kernel;
+        fi;
+        $bin/magiskboot hexpatch kernel 736B69705F696E697472616D667300 77616E745F696E697472616D667300;
+        if [ "$comp" ]; then
+          $bin/magiskboot compress=$comp kernel kernel.$comp;
+          if [ $? != 0 ]; then
+            echo "Attempting kernel repack with busybox $comp..." >&2;
+            $comp -9c kernel > kernel.$comp;
+          fi;
+          mv -f kernel.$comp kernel;
+        fi;
+      else
+        case $kernel in
+          *-dtb) rm -f kernel_dtb;;
+        esac;
+      fi;
+    fi;
+    test "$ramdisk" && cp -f $ramdisk ramdisk.cpio;
     test "$dt" -a -f extra && cp -f $dt extra;
     for i in dtb recovery_dtbo; do
       test "$(eval echo \$$i)" -a -f $i && cp -f $(eval echo \$$i) $i;
     done;
+    if [ $((magisk_patched & 3)) -eq 1 ]; then
+      export $(cat .magisk);
+      test $((magisk_patched & 8)) -ne 0 && export TWOSTAGEINIT=true;
+      for fdt in dtb extra kernel_dtb recovery_dtbo; do
+        test -f $fdt && $bin/magiskboot dtb $fdt patch;
+      done;
+    fi;
     case $ramdisk_compression in
       none|cpio) nocompflag="-n";;
     esac;
@@ -334,8 +370,8 @@ flash_boot() {
       *recovery*|*SOS*) avbtype=recovery;;
       *) avbtype=boot;;
     esac;
-    if [ "$(/system/bin/dalvikvm -Xbootclasspath:/system/framework/core-oj.jar:/system/framework/core-libart.jar:/system/framework/conscrypt.jar:/system/framework/bouncycastle.jar -Xnodex2oat -Xnoimage-dex2oat -cp $bin/BootSignature_Android.jar com.android.verity.BootSignature -verify boot.img 2>&1 | grep VALID)" ]; then
-      /system/bin/dalvikvm -Xbootclasspath:/system/framework/core-oj.jar:/system/framework/core-libart.jar:/system/framework/conscrypt.jar:/system/framework/bouncycastle.jar -Xnodex2oat -Xnoimage-dex2oat -cp $bin/BootSignature_Android.jar com.android.verity.BootSignature /$avbtype boot-new.img $pk8 $cert boot-new-signed.img;
+    if [ "$(/system/bin/dalvikvm -Xnoimage-dex2oat -cp $bin/BootSignature_Android.jar com.android.verity.BootSignature -verify boot.img 2>&1 | grep VALID)" ]; then
+      /system/bin/dalvikvm -Xnoimage-dex2oat -cp $bin/BootSignature_Android.jar com.android.verity.BootSignature /$avbtype boot-new.img $pk8 $cert boot-new-signed.img;
     fi;
   fi;
   if [ $? != 0 -o "$signfail" ]; then
@@ -614,6 +650,7 @@ reset_ak() {
   else
     rm -rf $patch $home/rdtmp;
   fi;
+  unset magisk_patched KEEPFORCEENCRYPT KEEPVERITY SHA1 TWOSTAGEINIT;
   setup_ak;
 }
 

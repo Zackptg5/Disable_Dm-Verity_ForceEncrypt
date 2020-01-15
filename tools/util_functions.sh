@@ -108,70 +108,21 @@ get_flags() {
   export KEEPQUOTA
 }
 
-patch_dtbo_image() {
-  local DTBOIMAGE=`find_block dtbo$slot`
-  if [ ! -z $DTBOIMAGE ]; then
-    ui_print "- DTBO image: $DTBOIMAGE"
-    if $bin/magiskboot dtb $DTBOIMAGE patch dtbo; then
-      ui_print "- Patching DTBO to remove avb-verity"
-      cat dtbo /dev/zero > $DTBOIMAGE
-      rm -f dtbo
-      return 0
+patch_dtb_partitions() {
+  local result=1
+  for name in dtb dtbo; do
+    local IMAGE=`find_block $name$slot`
+    if [ ! -z $IMAGE ]; then
+      ui_print "- $name image: $IMAGE"
+      if $bin/magiskboot dtb $IMAGE patch dt.patched; then
+        result=0
+        ui_print "- Flashing patched $name"
+        cat dt.patched /dev/zero > $IMAGE
+        rm -f dt.patched
+      fi
     fi
-  fi
-  return 1
-}
-
-mount_apex() {
-  # Mount apex files so dynamic linked stuff works
-  if [ -d /system/apex ]; then
-    [ -L /apex ] && rm -f /apex
-    # Apex files present - needs to extract and mount the payload imgs
-    if [ -f "/system/apex/com.android.runtime.release.apex" ]; then
-      local j=0
-      [ -e /dev/block/loop1 ] && local minorx=$(ls -l /dev/block/loop1 | awk '{print $6}') || local minorx=1
-      for i in /system/apex/*.apex; do
-        local DEST="/apex/$(basename $i | sed 's/.apex$//')"
-        [ "$DEST" == "/apex/com.android.runtime.release" ] && DEST="/apex/com.android.runtime"
-        mkdir -p $DEST
-        unzip -qo $i apex_payload.img -d /apex
-        mv -f /apex/apex_payload.img $DEST.img
-        while [ $j -lt 100 ]; do
-          local loop=/dev/loop$j
-          mknod $loop b 7 $((j * minorx)) 2>/dev/null
-          losetup $loop $DEST.img 2>/dev/null
-          j=$((j + 1))
-          losetup $loop | grep -q $DEST.img && break
-        done;
-        uloop="$uloop $((j - 1))"
-        mount -t ext4 -o loop,noatime,ro $loop $DEST || return 1
-      done
-    # Already extracted payload imgs present, just mount the folders
-    elif [ -d "/system/apex/com.android.runtime.release" ]; then
-      for i in /system/apex/*; do
-        local DEST="/apex/$(basename $i)"
-        [ "$DEST" == "/apex/com.android.runtime.release" ] && DEST="/apex/com.android.runtime"
-        mkdir -p $DEST
-        mount -o bind,ro $i $DEST
-      done
-    fi
-  fi
-}
-
-umount_apex() {
-  # Unmount apex
-  if [ -d /system/apex ]; then
-    for i in /apex/*; do
-      umount -l $i 2>/dev/null
-    done
-    if [ -f "/system/apex/com.android.runtime.release.apex" ]; then
-      for i in $uloop; do
-        local loop=/dev/loop$i
-        losetup -d $loop 2>/dev/null || break
-      done
-    fi
-    rm -rf /apex
-  fi
+  done
+  return $result
 }
 
 chooseport() {

@@ -36,7 +36,6 @@ ramdisk_compression=auto;
 
 
 ## AnyKernel install
-mount_apex
 ui_print "- Detecting Root Method..."
 if [ -d $MAGISKBIN ]; then
   ROOT="Magisk"; ui_print "   MagiskSU detected!"
@@ -111,6 +110,7 @@ else
   make_config
 fi
 
+# Fstab patches
 FSTABS="$(find /system /vendor -type f \( -name "fstab*" -o -name "*.fstab" \) | sed "s|^./||")"
 [ -z "$FSTABS" ] || FSTABS="$FSTABS "
 for i in odm nvdata; do
@@ -120,7 +120,6 @@ for i in odm nvdata; do
   fi
 done
 
-# Fstab patches
 if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
   [ -z "$FSTABS"  ] || ui_print "- Patching fstabs:"
   for i in $FSTABS; do
@@ -193,7 +192,6 @@ for i in odm nvdata; do
   [ "$(find /dev/block -iname $i | head -n 1)" ] && { ui_print "- Unmounting $i"; umount -l /$i 2>/dev/null; rm -rf /$i; }
 done
 
-$KEEPVERITY || patch_dtbo_image
+patch_dtb_partitions
 ui_print "- Repacking boot img..."
 flash_boot;
-umount_apex
