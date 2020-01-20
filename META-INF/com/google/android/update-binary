@@ -140,6 +140,24 @@ abort() {
   fi;
   exit 1;
 }
+dump_moduleinfo() {
+cat <<EOF > $1;
+name=AK3 Helper Module
+version=$($bb awk '{ print $3 }' $home/vertmp) $($bb grep -oE '#.[0-9]' $home/vertmp)
+versionCode=1
+author=AnyKernel3
+description=$kernel_string
+EOF
+}
+dump_moduleremover() {
+cat <<EOF > $1;
+#!/system/bin/sh
+MODDIR=\${0%/*};
+if [ "\$(cat /proc/version)" != "\$(cat \$MODDIR/version)" ]; then
+  rm -rf \$MODDIR;
+fi;
+EOF
+}
 
 ui_print " ";
 cleanup;
@@ -173,7 +191,8 @@ if [ -f banner ]; then
   ui_print " " " ";
 fi;
 
-ui_print "$(file_getprop anykernel.sh kernel.string)";
+kernel_string="$(file_getprop anykernel.sh kernel.string)";
+ui_print "$kernel_string";
 if [ -f version ]; then
   ui_print " ";
   ui_printfile version;
@@ -185,7 +204,7 @@ $BOOTMODE || $bb mount -o bind /dev/urandom /dev/random;
 umount_all;
 setup_mountpoint $ANDROID_ROOT;
 if ! is_mounted $ANDROID_ROOT; then
-  $bb mount -o rw -t auto $ANDROID_ROOT;
+  $bb mount -o ro -t auto $ANDROID_ROOT;
 fi;
 case $ANDROID_ROOT in
   /system_root) setup_mountpoint /system;;
@@ -196,7 +215,7 @@ case $ANDROID_ROOT in
       if [ $? != 0 ]; then
         $bb umount /system;
         $bb umount -l /system 2>/dev/null;
-        $bb mount -o rw -t auto /dev/block/bootdevice/by-name/system /system_root;
+        $bb mount -o ro -t auto /dev/block/bootdevice/by-name/system /system_root;
       fi;
     fi;
   ;;
@@ -204,7 +223,7 @@ esac;
 if is_mounted /system_root; then
   $bb mount -o bind /system_root/system /system;
 fi;
-$bb mount -o rw -t auto /vendor 2>/dev/null;
+$bb mount -o ro -t auto /vendor 2>/dev/null;
 $BOOTMODE || mount_apex;
 if ! is_mounted /data; then
   $bb mount /data;
@@ -309,35 +328,54 @@ if [ $? != 0 ]; then
 fi;
 
 if [ "$(file_getprop anykernel.sh do.modules)" == 1 ]; then
-  ui_print " " "Pushing modules...";
-  $bb mount -o rw,remount -t auto /system;
-  $bb mount -o rw,remount -t auto /vendor 2>/dev/null;
-  cd $home/modules;
-  for module in $(find . -name '*.ko'); do
-    modtarget=$(echo $module | $bb cut -c2-);
-    if [ ! -e $modtarget ]; then
-      case $module in
-        */vendor/*) modcon=vendor;;
-        *) modcon=system;;
-      esac;
+  if [ "$(file_getprop anykernel.sh do.systemless)" == 1 ]; then
+    cd $home/modules;
+    ui_print " " "Creating kernel helper Magisk module...";
+    if [ -d /data/adb/magisk -a -f $home/split_img/.magisk ]; then
+      umask 022;
+      moddir=/data/adb/modules/ak3-helper;
+      rm -rf $moddir;
+      mkdir -p system $moddir;
+      ($bb mv -f product system;
+      $bb mv -f vendor system) 2>/dev/null;
+      $bb cp -rLf * $moddir;
+      dump_moduleinfo $moddir/module.prop;
+      dump_moduleremover $moddir/post-fs-data.sh;
+      cp -f $home/vertmp $moddir/version;
+    else
+      ui_print "Magisk installation not found. Skipped!";
     fi;
-    if is_mounted $modtarget; then
-      $bb mount -o rw,remount -t auto $modtarget;
-    fi;
-    mkdir -p $(dirname $modtarget);
-    $bb cp -rLf $module $modtarget;
-    $bb chown 0:0 $modtarget;
-    $bb chmod 644 $modtarget;
-    if [ "$modcon" ]; then
-      chcon "u:object_r:${modcon}_file:s0" $modtarget;
-    fi;
-    if is_mounted $modtarget; then
-      $bb mount -o ro,remount -t auto $modtarget;
-    fi;
-  done;
+  else
+    cd $home/modules;
+    ui_print " " "Pushing modules...";
+    $bb mount -o rw,remount -t auto /system;
+    $bb mount -o rw,remount -t auto /vendor 2>/dev/null;
+    for module in $(find . -name '*.ko'); do
+      modtarget=$(echo $module | $bb cut -c2-);
+      if [ ! -e $modtarget ]; then
+        case $module in
+          */vendor/*) modcon=vendor;;
+          *) modcon=system;;
+        esac;
+      fi;
+      if is_mounted $modtarget; then
+        $bb mount -o rw,remount -t auto $modtarget;
+      fi;
+      mkdir -p $(dirname $modtarget);
+      $bb cp -rLf $module $modtarget;
+      $bb chown 0:0 $modtarget;
+      $bb chmod 644 $modtarget;
+      if [ "$modcon" ]; then
+        chcon "u:object_r:${modcon}_file:s0" $modtarget;
+      fi;
+      if is_mounted $modtarget; then
+        $bb mount -o ro,remount -t auto $modtarget;
+      fi;
+    done;
+    $bb mount -o ro,remount -t auto /system;
+    $bb mount -o ro,remount -t auto /vendor 2>/dev/null;
+  fi;
   cd $home;
-  $bb mount -o ro,remount -t auto /system;
-  $bb mount -o ro,remount -t auto /vendor 2>/dev/null;
 fi;
 
 debugging;

@@ -7,6 +7,7 @@ properties() { '
 kernel.string=
 do.devicecheck=0
 do.modules=0
+do.systemless=1
 do.cleanup=1
 do.cleanuponabort=1
 device.name1=
@@ -111,7 +112,7 @@ else
 fi
 
 # Fstab patches
-FSTABS="$(find /system /vendor -type f \( -name "fstab*" -o -name "*.fstab" \) | sed "s|^./||")"
+FSTABS="$(find $VEN/etc -type f \( -name "fstab*" -o -name "*.fstab" \) | sed "s|^./||")"
 [ -z "$FSTABS" ] || FSTABS="$FSTABS "
 for i in odm nvdata; do
   if [ "$(find /dev/block -iname $i | head -n 1)" ]; then

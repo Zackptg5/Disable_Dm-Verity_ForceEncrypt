@@ -174,6 +174,8 @@ get_key_opts() {
 
 check_data
 get_flags
+[ -L /system/vendor ] && VEN=/vendor || VEN=/system/vendor
+$bb mount -o rw,remount -t auto $(echo $VEN | cut -d '/' -f-2) 2>/dev/null
 
 ui_print " "
 ui_print "- Chosen/Default Arguments:"
