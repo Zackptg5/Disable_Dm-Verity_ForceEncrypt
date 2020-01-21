@@ -126,7 +126,7 @@ if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
   for i in $FSTABS; do
     [ -f "$i" ] || continue
     ui_print "   $i"
-    PERM="$(/system/bin/ls -Z $i | awk '{print $1}')"
+    PERM="$(ls -Z $i | awk '{print $1}')"
     $KEEPFORCEENCRYPT || sed -i "
       s/forceencrypt=/=/g
       s/forcefdeorfbe=/=/g
