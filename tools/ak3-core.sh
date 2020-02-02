@@ -15,7 +15,8 @@ split_img=$home/split_img;
 # ui_print "<text>" [...]
 ui_print() {
   until [ ! "$1" ]; do
-    echo -e "ui_print $1\nui_print" > /proc/self/fd/$OUTFD;
+    echo -e "ui_print $1
+      ui_print" > /proc/self/fd/$OUTFD;
     shift;
   done;
 }
@@ -685,6 +686,9 @@ setup_ak() {
         test "$slot" && slot=_$slot;
       fi;
       if [ "$slot" ]; then
+        if [ -d /postinstall/tmp -a ! "$slot_select" ]; then
+          slot_select=inactive;
+        fi;
         case $slot_select in
           inactive)
             case $slot in
