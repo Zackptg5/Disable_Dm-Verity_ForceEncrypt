@@ -127,26 +127,19 @@ if [ `file_getprop /system/build.prop ro.build.version.sdk` -ge 26 ]; then
     [ -f "$i" ] || continue
     ui_print "   $i"
     PERM="$(ls -Z $i | awk '{print $1}')"
-    $KEEPFORCEENCRYPT || sed -i "
-      s/forceencrypt=/=/g
-      s/forcefdeorfbe=/=/g
-      s/fileencryption=/=/g
+    $KEEPFORCEENCRYPT || sed -ri "
+      s/forceencrypt=|forcefdeorfbe=|fileencryption=/=/g
     " "$i"
-    $KEEPVERITY || sed -i "
-      s/,verify//g
-      s/verify,//g
-      s/verify\b//g
-      s/,avb//g
-      s/avb,//g
-      s/avb\b//g
-      s/,support_scfs//g
-      s/support_scfs,//g
-      s/support_scfs\b//g
+    $KEEPVERITY || sed -ri "
+      s/,verifyatboot|verifyatboot,|verifyatboot\b//g
+      s/,verify|verify,|verify\b//g
+      s/,avb_keys|avb_keys,|avb_keys\b//g
+      s/,avb|avb,|avb\b//g
+      s/,support_scfs|support_scfs,|support_scfs\b//g
+      s/,fsverity|fsverity,|fsverity\b//g
     " "$i"
-    $KEEPQUOTA || sed -i "
-      s/,quota//g
-      s/quota,//g
-      s/quota\b//g
+    $KEEPQUOTA || sed -ri "
+      s/,quota|quota,|quota\b//g
     " "$i"
     chcon $PERM $i
   done

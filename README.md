@@ -2,7 +2,7 @@
 Heavily based on previous work by topjohnwu and jcadduono
 
 ## Support
-[XDA](https://forum.xda-developers.com/android/software-hacking/mods-zackptg5-s-misc-projects-t3881164)
+[XDA](https://forum.xda-developers.com/android/software/universal-dm-verity-forceencrypt-t3817389/post77091359)
 
 ----------------------------------------------------------------------------------
 AnyKernel3 - Flashable Zip Template for Kernel Releases with Ramdisk Modifications
