@@ -17,7 +17,7 @@ test "$ANDROID_ROOT" || ANDROID_ROOT=/system;
 ui_print() {
   until [ ! "$1" ]; do
     echo "ui_print $1
-      ui_print" > $OUTFD;
+      ui_print" >> $OUTFD;
     shift;
   done;
 }
@@ -26,13 +26,13 @@ ui_printfile() {
     ui_print "$line";
   done < $1;
 }
-show_progress() { echo "progress $1 $2" > $OUTFD; }
+show_progress() { echo "progress $1 $2" >> $OUTFD; }
 file_getprop() { $BB grep "^$2=" "$1" | $BB cut -d= -f2-; }
 setup_mountpoint() {
   test -L $1 && $BB mv -f $1 ${1}_link;
   if [ ! -d $1 ]; then
     rm -f $1;
-    mkdir $1;
+    mkdir -p $1;
   fi;
 }
 is_mounted() { $BB mount | $BB grep -q " $1 "; }
@@ -70,7 +70,7 @@ mount_apex() {
   done;
   export ANDROID_RUNTIME_ROOT=/apex/com.android.runtime;
   export ANDROID_TZDATA_ROOT=/apex/com.android.tzdata;
-  export BOOTCLASSPATH=/apex/com.android.runtime/javalib/core-oj.jar:/apex/com.android.runtime/javalib/core-libart.jar:/apex/com.android.runtime/javalib/okhttp.jar:/apex/com.android.runtime/javalib/bouncycastle.jar:/apex/com.android.runtime/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/system/framework/android.test.base.jar:/apex/com.android.conscrypt/javalib/conscrypt.jar:/apex/com.android.media/javalib/updatable-media.jar;
+  export BOOTCLASSPATH=/apex/com.android.runtime/javalib/core-oj.jar:/apex/com.android.runtime/javalib/core-libart.jar:/apex/com.android.runtime/javalib/okhttp.jar:/apex/com.android.runtime/javalib/bouncycastle.jar:/apex/com.android.runtime/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/system/framework/android.test.base.jar:/system/framework/telephony-ext.jar:/apex/com.android.conscrypt/javalib/conscrypt.jar:/apex/com.android.media/javalib/updatable-media.jar;
 }
 umount_apex() {
   test -d /apex || return 1;
@@ -120,11 +120,11 @@ mount_all() {
       $BB mount -o bind /system_root/system /system;
     fi;
   fi;
-  $BOOTMODE || mount_apex;
+  mount_apex;
 }
 umount_all() {
-  (if ! $BOOTMODE; then
-    umount_apex;
+  (umount_apex;
+  if [ ! -d /postinstall/tmp ]; then
     $BB umount /system;
     $BB umount -l /system;
     if [ -e /system_root ]; then
@@ -140,12 +140,14 @@ umount_all() {
   fi) 2>/dev/null;
 }
 setup_env() {
-  $BOOTMODE || $BB mount -o bind /dev/urandom /dev/random;
+  $BOOTMODE && return 1;
+  $BB mount -o bind /dev/urandom /dev/random;
   umount_all;
   mount_all;
   OLD_LD_PATH=$LD_LIBRARY_PATH;
   OLD_LD_PRE=$LD_PRELOAD;
-  unset LD_LIBRARY_PATH LD_PRELOAD;
+  OLD_LD_CFG=$LD_CONFIG_FILE;
+  unset LD_LIBRARY_PATH LD_PRELOAD LD_CONFIG_FILE;
   if [ ! "$(getprop 2>/dev/null)" ]; then
     getprop() {
       local propdir propfile propval;
@@ -163,10 +165,12 @@ setup_env() {
   fi;
 }
 restore_env() {
+  $BOOTMODE && return 1;
   local dir;
   unset -f getprop;
   test "$OLD_LD_PATH" && export LD_LIBRARY_PATH=$OLD_LD_PATH;
   test "$OLD_LD_PRE" && export LD_PRELOAD=$OLD_LD_PRE;
+  test "$OLD_LD_CFG" && export LD_CONFIG_FILE=$OLD_LD_CFG;
   umount_all;
   (for dir in /apex /system /system_root; do
     if [ -L "${dir}_link" ]; then
@@ -220,7 +224,7 @@ do_devicecheck() {
   fi;
 }
 int2ver() {
-  if [ "$1" -eq "$1" ] 2>/dev/null; then
+  if $BB [ "$1" -eq "$1" ] 2>/dev/null; then
     echo "$1.0.0";
   elif [ ! "$(echo "$1" | $BB cut -d. -f3)" ]; then
     echo "$1.0";
@@ -288,11 +292,11 @@ description=$KERNEL_STRING
 EOF
 }
 dump_moduleremover() {
-cat <<EOF > $1;
+cat <<'EOF' > $1;
 #!/system/bin/sh
-MODDIR=\${0%/*};
-if [ "\$(cat /proc/version)" != "\$(cat \$MODDIR/version)" ]; then
-  rm -rf \$MODDIR;
+MODDIR=${0%/*};
+if [ "$(cat /proc/version)" != "$(cat $MODDIR/version)" ]; then
+  rm -rf $MODDIR;
 fi;
 EOF
 }
@@ -321,8 +325,10 @@ do_modules() {
   else
     cd $AKHOME/modules;
     ui_print " " "Pushing modules...";
-    $BB mount -o rw,remount -t auto /system;
-    $BB mount -o rw,remount -t auto /vendor 2>/dev/null;
+    if [ ! -d /postinstall/tmp ]; then
+      $BB mount -o rw,remount -t auto /system;
+      $BB mount -o rw,remount -t auto /vendor 2>/dev/null;
+    fi;
     for module in $(find . -name '*.ko'); do
       modtarget=$POSTINSTALL$(echo $module | $BB cut -c2-);
       if [ ! -e $modtarget ]; then
@@ -345,8 +351,10 @@ do_modules() {
         $BB mount -o ro,remount -t auto $modtarget;
       fi;
     done;
-    $BB mount -o ro,remount -t auto /system;
-    $BB mount -o ro,remount -t auto /vendor 2>/dev/null;
+    if [ ! -d /postinstall/tmp ]; then
+      $BB mount -o ro,remount -t auto /system;
+      $BB mount -o ro,remount -t auto /vendor 2>/dev/null;
+    fi;
   fi;
   cd $AKHOME;
 }

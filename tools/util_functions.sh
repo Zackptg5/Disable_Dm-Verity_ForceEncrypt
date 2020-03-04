@@ -73,8 +73,8 @@ get_flags() {
   while true; do
     case $ZIPFILE in
       "package.zip") get_key_opts; break;;
+      *enfec*|*enforceencrypt*) KEEPFORCEENCRYPT=true; ZIPFILE=$(echo $ZIPFILE | sed -r "s/(enfec|enforceencrypt)//g");;
       *fec*|*forceencrypt*) KEEPFORCEENCRYPT=false; ZIPFILE=$(echo $ZIPFILE | sed -r "s/(fec|forceencrypt)//g");;
-      *verity*) KEEPVERITY=false; ZIPFILE=$(echo $ZIPFILE | sed "s/verity//g");;
       *quota*) KEEPQUOTA=false; ZIPFILE=$(echo $ZIPFILE | sed "s/quota//g");;
       *) break;;
     esac
@@ -83,14 +83,7 @@ get_flags() {
   # override variables
   grep ' / ' /proc/mounts | grep -qv 'rootfs' || grep -q ' /system_root ' /proc/mounts && SYSTEM_ROOT=true || SYSTEM_ROOT=false
   ! $SYSTEM_ROOT && [ -f /system_root/init.rc ] && SYSTEM_ROOT=true
-  if [ -z $KEEPVERITY ]; then
-    if $SYSTEM_ROOT; then
-      KEEPVERITY=true
-      ui_print "- System-as-root, keep dm/avb-verity"
-    else
-      KEEPVERITY=false
-    fi
-  fi
+  KEEPVERITY=false
   if [ -z $KEEPFORCEENCRYPT ]; then
     grep ' /data ' /proc/mounts | grep -q 'dm-' && FDE=true || FDE=false
     [ -d /data/unencrypted ] && FBE=true || FBE=false
@@ -160,12 +153,16 @@ get_key_opts() {
   ui_print "  Vol+ = yes, Vol- = no"
   ui_print " "
   sleep 1
-  ui_print "  Disable verity?"
-  chooseport && KEEPVERITY=false
-  ui_print "  Disable force encryption?"
-  chooseport && KEEPFORCEENCRYPT=false
   ui_print "  Disable Disc Quota? (Select 'no' if unsure)"
   chooseport && KEEPQUOTA=false
+  ui_print "  Disable force encryption?"
+  if chooseport; then
+    KEEPFORCEENCRYPT=false
+  else
+    ui_print "  Keep encryption enabled if present or auto-detect?"
+    ui_print "  Vol+ = keep encryption enabled, Vol- = auto-detect"
+    chooseport && KEEPFORCEENCRYPT=true
+  fi
 }
 
 ########
