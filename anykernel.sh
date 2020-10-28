@@ -63,11 +63,6 @@ else
   STATUS=0
 fi
 
-if [ $((STATUS & 8)) -ne 0 ]; then
-  # Possibly using 2SI, export env var
-  export TWOSTAGEINIT=true
-fi
-
 # Make supersu and magisk config files
 make_config() {
   case $ROOT in
@@ -110,6 +105,9 @@ if [ "$ROOT" == "Magisk" ]; then
 else
   make_config
 fi
+
+# Delete moto crap
+rm -f /vendor/etc/init/hw/init.mmi.hab.rc
 
 # Fstab patches
 FSTABS="$(find $VEN/etc -type f \( -name "fstab*" -o -name "*.fstab" \) | sed "s|^./||")"
@@ -186,6 +184,5 @@ for i in odm nvdata; do
   [ "$(find /dev/block -iname $i | head -n 1)" ] && { ui_print "- Unmounting $i"; umount -l /$i 2>/dev/null; rm -rf /$i; }
 done
 
-patch_dtb_partitions
 ui_print "- Repacking boot img..."
 flash_boot;

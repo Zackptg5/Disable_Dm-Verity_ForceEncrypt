@@ -142,6 +142,11 @@ umount_all() {
 setup_env() {
   $BOOTMODE && return 1;
   $BB mount -o bind /dev/urandom /dev/random;
+  if [ -L /etc ]; then
+    setup_mountpoint /etc;
+    $BB cp -af /etc_link/* /etc;
+    $BB sed -i 's; / ; /system_root ;' /etc/fstab;
+  fi;
   umount_all;
   mount_all;
   OLD_LD_PATH=$LD_LIBRARY_PATH;
@@ -172,7 +177,8 @@ restore_env() {
   test "$OLD_LD_PRE" && export LD_PRELOAD=$OLD_LD_PRE;
   test "$OLD_LD_CFG" && export LD_CONFIG_FILE=$OLD_LD_CFG;
   umount_all;
-  (for dir in /apex /system /system_root; do
+  test -L /etc_link && $BB rm -rf /etc/*;
+  (for dir in /apex /system /system_root /etc; do
     if [ -L "${dir}_link" ]; then
       rmdir $dir;
       $BB mv -f ${dir}_link $dir;
@@ -302,7 +308,7 @@ EOF
 }
 do_modules() {
   test "$(file_getprop anykernel.sh do.modules)" == 1 || return 1;
-  local modcon moddir modtarget module umask;
+  local block modcon moddir modtarget module slot umask;
   if [ "$(file_getprop anykernel.sh do.systemless)" == 1 ]; then
     cd $AKHOME/modules;
     ui_print " " "Creating kernel helper Magisk module...";
@@ -325,6 +331,13 @@ do_modules() {
   else
     cd $AKHOME/modules;
     ui_print " " "Pushing modules...";
+    if [ -d /dev/block/mapper ]; then
+      for block in system vendor; do
+        for slot in "" _a _b; do
+          $BB blockdev --setrw /dev/block/mapper/$block$slot 2>/dev/null;
+        done;
+      done;
+    fi;
     if [ ! -d /postinstall/tmp ]; then
       $BB mount -o rw,remount -t auto /system;
       $BB mount -o rw,remount -t auto /vendor 2>/dev/null;

@@ -15,24 +15,34 @@ is_mounted() {
 # Installation Related
 #######################
 
+# find_block [partname...]
 find_block() {
+  local BLOCK DEV DEVICE DEVNAME PARTNAME UEVENT
   for BLOCK in "$@"; do
-    DEVICE=`find /dev/block -type l -iname $BLOCK | head -n 1` 2>/dev/null
+    DEVICE=`find /dev/block \( -type b -o -type c -o -type l \) -iname $BLOCK | head -n 1` 2>/dev/null
     if [ ! -z $DEVICE ]; then
       readlink -f $DEVICE
       return 0
     fi
   done
   # Fallback by parsing sysfs uevents
-  for uevent in /sys/dev/block/*/uevent; do
-    local DEVNAME=`file_getprop $uevent DEVNAME`
-    local PARTNAME=`file_getprop $uevent PARTNAME`
+  for UEVENT in /sys/dev/block/*/uevent; do
+    DEVNAME=`grep_prop DEVNAME $UEVENT`
+    PARTNAME=`grep_prop PARTNAME $UEVENT`
     for BLOCK in "$@"; do
-      if [ "`toupper $BLOCK`" = "`toupper $PARTNAME`" ]; then
+      if [ "$(toupper $BLOCK)" = "$(toupper $PARTNAME)" ]; then
         echo /dev/block/$DEVNAME
         return 0
       fi
     done
+  done
+  # Look just in /dev in case we're dealing with MTD/NAND without /dev/block devices/links
+  for DEV in "$@"; do
+    DEVICE=`find /dev \( -type b -o -type c -o -type l \) -maxdepth 1 -iname $DEV | head -n 1` 2>/dev/null
+    if [ ! -z $DEVICE ]; then
+      readlink -f $DEVICE
+      return 0
+    fi
   done
   return 1
 }
@@ -99,23 +109,6 @@ get_flags() {
   export KEEPVERITY
   export KEEPFORCEENCRYPT
   export KEEPQUOTA
-}
-
-patch_dtb_partitions() {
-  local result=1
-  for name in dtb dtbo; do
-    local IMAGE=`find_block $name$slot`
-    if [ ! -z $IMAGE ]; then
-      ui_print "- $name image: $IMAGE"
-      if $bin/magiskboot dtb $IMAGE patch dt.patched; then
-        result=0
-        ui_print "- Flashing patched $name"
-        cat dt.patched /dev/zero > $IMAGE
-        rm -f dt.patched
-      fi
-    fi
-  done
-  return $result
 }
 
 chooseport() {
