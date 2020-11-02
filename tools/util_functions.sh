@@ -113,9 +113,11 @@ get_flags() {
 
 chooseport() {
   # Keycheck binary by someone755 @Github, idea for code below by Zappo @xda-developers
+  # Calling it first time detects previous input. Calling it second time will do what we want
   local error=false
   while true; do
-    timeout 3 $MODPATH/common/addon/Volume-Key-Selector/tools/$ARCH32/keycheck
+    timeout 0 $bin/keycheck
+    timeout 3 $bin/keycheck
     local SEL=$?
     if [ $SEL -eq 42 ]; then
       return 0
