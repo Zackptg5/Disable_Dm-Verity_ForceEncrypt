@@ -113,21 +113,18 @@ get_flags() {
 
 chooseport() {
   # Keycheck binary by someone755 @Github, idea for code below by Zappo @xda-developers
-  # Calling it first time detects previous input. Calling it second time will do what we want
+  local error=false
   while true; do
-    $bin/keycheck
-    $bin/keycheck
+    timeout 3 $MODPATH/common/addon/Volume-Key-Selector/tools/$ARCH32/keycheck
     local SEL=$?
-    if [ "$1" == "UP" ]; then
-      UP=$SEL
-      break
-    elif [ "$1" == "DOWN" ]; then
-      DOWN=$SEL
-      break
-    elif [ $SEL -eq $UP ]; then
+    if [ $SEL -eq 42 ]; then
       return 0
-    elif [ $SEL -eq $DOWN ]; then
+    elif [ $SEL -eq 41 ]; then
       return 1
+    else
+      $error && abort "Volume key error!"
+      error=true
+      echo "Volume key not detected. Try again"
     fi
   done
 }
@@ -135,12 +132,6 @@ chooseport() {
 get_key_opts() {
   ui_print "  Sideload detected! Zipname options can't be read"
   ui_print "  Using Vol Key selection method"
-  ui_print " "
-  ui_print "- Vol Key Programming -"
-  ui_print "  Press Vol Up"
-  chooseport "UP"
-  ui_print "  Press Vol Down"
-  chooseport "DOWN"
   ui_print " "
   ui_print "- Select Options -"
   ui_print "  Vol+ = yes, Vol- = no"
