@@ -1,3 +1,6 @@
+# Deprecated
+I don't have any devices with functional TWRP and haven't for well over a year. Don't see it happening in the near future either so I won't be able to update this anymore. Feel free to fork and change however you like
+
 # Disables Verity, Forceencrypt, and/or Disc Quota
 Heavily based on previous work by topjohnwu and jcadduono
 
